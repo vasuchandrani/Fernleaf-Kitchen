@@ -13,4 +13,6 @@ export default defineConfig({
   datasource: {
     url: env("DATABASE_URL"),
   },
+  // @ts-ignore: Prisma v6 beta typings bug
+  seed: "ts-node prisma/seed.ts",
 });
