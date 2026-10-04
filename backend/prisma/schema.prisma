@@ -231,6 +231,8 @@ model Order {
   invoice         Invoice?      @relation(fields: [invoiceId], references: [id])
   dropId          Int?
   drop            Drop?         @relation(fields: [dropId], references: [id])
+
+  @@index([dropId])
 }
 
 model OrderLine {
@@ -282,10 +284,18 @@ model Drop {
   deliveryDate DateTime @db.Date
   deliveryTime String
   driverId    Int?
-  status      String @default("PENDING")
+  status      String @default("WAITING_ON_KITCHEN")
+  
+  deliveredAt      DateTime?
+  deliveryNote     String?
+  deliveryPhotoUrl String?
+  onTime           Boolean?
   
   orders      Order[]
   driver      User?   @relation("AssignedDriver", fields: [driverId], references: [id])
+
+  @@index([deliveryDate, status])
+  @@index([driverId])
 }
 
 model Invoice {

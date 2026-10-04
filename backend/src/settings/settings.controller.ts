@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { Public } from '../auth/public.decorator';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
@@ -17,5 +17,29 @@ export class SettingsController {
   @RequirePermissions('settings.edit')
   updateSettings(@Body() data: any) {
     return this.settingsService.updateAll(data);
+  }
+
+  @Get('roles')
+  @RequirePermissions('settings.edit')
+  getRoles() {
+    return this.settingsService.getRoles();
+  }
+
+  @Get('permissions')
+  @RequirePermissions('settings.edit')
+  getPermissions() {
+    return this.settingsService.getPermissions();
+  }
+
+  @Post('roles')
+  @RequirePermissions('settings.edit')
+  createRole(@Body() data: { name: string; description: string; permissionIds: number[] }) {
+    return this.settingsService.createRole(data.name, data.description, data.permissionIds || []);
+  }
+
+  @Put('roles/:id/permissions')
+  @RequirePermissions('settings.edit')
+  updateRolePermissions(@Param('id') id: string, @Body() data: { permissionIds: number[] }) {
+    return this.settingsService.updateRolePermissions(Number(id), data.permissionIds || []);
   }
 }

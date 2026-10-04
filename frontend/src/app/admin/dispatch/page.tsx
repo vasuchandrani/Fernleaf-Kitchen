@@ -1,23 +1,23 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Truck, MapPin, Calendar, Clock, User, CheckCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import CustomSelect from '@/components/CustomSelect';
+import { Truck, MapPin, Calendar, Clock, CheckCircle, Package, AlertTriangle, User, ChefHat, Box, ArrowRight } from 'lucide-react';
 
 interface Drop {
   id: number;
-  companyId: number;
+  companyName: string;
   addressId: number;
   deliveryDate: string;
   deliveryTime: string;
   status: string;
   driverId: number | null;
   driver: { id: number, name: string } | null;
-  orders: {
-    id: number;
-    totalAmount: number;
-    employee: { company: { name: string, addresses: any[] } };
-  }[];
+  orderCount: number;
+  totalMeals: number;
+  totalCombinations: number;
+  completedCombinations: number;
+  isReady: boolean;
+  deliveredAt?: string;
+  onTime?: boolean;
 }
 
 export default function DispatchPage() {
@@ -25,33 +25,22 @@ export default function DispatchPage() {
   const [drops, setDrops] = useState<Drop[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
-    // Default to tomorrow for dispatch planning
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    setDate(`${year}-${month}-${day}`);
+    setDate(d.toISOString().split('T')[0]);
     fetchDrivers();
   }, []);
 
   useEffect(() => {
-    if (date) {
-      fetchDrops();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (date) fetchDrops();
   }, [date]);
 
   const fetchDrivers = async () => {
     try {
-      const res = await fetch('/api/proxy/companies'); // drivers might be in a different endpoint, let's assume we have a way or just hardcode some for now, actually we need users with ROLE=DRIVER
-      // Wait, there is no /users endpoint for drivers. We will just use the `/api/proxy/auth/me` to check who is logged in? 
-      // Actually we need an endpoint to fetch all users with Driver role. Let's make a mock one for now or just fetch from /api/proxy/settings? No.
-      // We will skip fetching drivers dynamically if we don't have the API, but wait! We can add a GET /users/drivers API easily.
+      const res = await fetch('/api/proxy/dispatch/drivers');
+      if (res.ok) setDrivers(await res.json());
     } catch {}
   };
 
@@ -62,154 +51,232 @@ export default function DispatchPage() {
       const data = await res.json();
       setDrops(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateDrops = async () => {
-    if (!date) return;
-    setGenerating(true);
+  const updateStatus = async (id: number, status: string) => {
     try {
-      const res = await fetch('/api/proxy/dispatch/drops/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date })
-      });
-      const data = await res.json();
-      alert(`Successfully generated ${data.dropsCreated} new drops.`);
-      fetchDrops();
-    } catch (e) {
-      console.error(e);
-      alert('Failed to generate drops');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const updateDropStatus = async (id: number, status: string) => {
-    try {
-      await fetch(`/api/proxy/dispatch/drops/${id}/status`, {
+      const res = await fetch(`/api/proxy/dispatch/drops/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.message || 'Error updating status');
+      }
+      fetchDrops();
+    } catch {}
+  };
+
+  const assignDriver = async (id: number, driverId: number) => {
+    try {
+      await fetch(`/api/proxy/dispatch/drops/${id}/driver`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId })
       });
       fetchDrops();
     } catch {}
   };
 
-  return (
-    <div className="animate-fade-in" style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-        <div>
-          <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Dispatch Management</h1>
-          <p style={{ color: 'var(--text-muted)' }}>Organize deliveries and assign drivers.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <div style={{ background: 'var(--bg-light)', padding: '8px 16px', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Calendar size={18} color="var(--text-muted)" />
-            <input 
-              type="date" 
-              value={date} 
-              onChange={e => setDate(e.target.value)}
-              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '1rem', fontWeight: 500 }}
-            />
+  const waiting = drops.filter(d => d.status === 'WAITING_ON_KITCHEN');
+  const ready = drops.filter(d => d.status === 'READY_TO_LEAVE');
+  const out = drops.filter(d => d.status === 'OUT_FOR_DELIVERY');
+  const delivered = drops.filter(d => d.status === 'DELIVERED');
+  const noDriver = ready.filter(d => !d.driverId);
+
+  const SummaryCard = ({ title, count, subtext }: { title: string, count: number, subtext?: string }) => (
+    <div style={{ flex: 1, minWidth: '160px', background: '#ffffff', padding: '16px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+      <div style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.05em', marginBottom: '8px' }}>{title}</div>
+      <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{count}</div>
+      {subtext && <div style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '8px' }}>{subtext}</div>}
+    </div>
+  );
+
+  const renderCard = (drop: Drop) => {
+    const isLate = false; // Add real logic if needed
+    
+    let badgeColor = '#94a3b8', badgeBg = '#f1f5f9', icon = null;
+    if (drop.status === 'READY_TO_LEAVE') { badgeColor = '#7e22ce'; badgeBg = '#f3e8ff'; icon = <Package size={14} />; }
+    if (drop.status === 'OUT_FOR_DELIVERY') { badgeColor = '#2563eb'; badgeBg = '#dbeafe'; icon = <Truck size={14} />; }
+    if (drop.status === 'DELIVERED') { badgeColor = '#16a34a'; badgeBg = '#dcfce7'; icon = <CheckCircle size={14} />; }
+
+    return (
+      <div key={drop.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{drop.deliveryTime}</div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>delivery time</div>
           </div>
-          <button 
-            className="btn-primary" 
-            onClick={generateDrops} 
-            disabled={generating}
-            style={{ padding: '12px 24px' }}
-          >
-            {generating ? 'Generating...' : 'Generate Drops from Confirmed Orders'}
-          </button>
+          {drop.status !== 'WAITING_ON_KITCHEN' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: badgeBg, color: badgeColor, padding: '4px 10px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
+              {icon}
+              {drop.status === 'READY_TO_LEAVE' ? 'Ready to leave' : drop.status === 'OUT_FOR_DELIVERY' ? 'Out for delivery' : 'Delivered'}
+            </div>
+          )}
+        </div>
+
+        {isLate && drop.status === 'READY_TO_LEAVE' && (
+          <div style={{ background: '#ffedd5', color: '#c2410c', padding: '6px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
+            Leave-by 13:00 passed
+          </div>
+        )}
+
+        <div style={{ marginTop: '4px' }}>
+          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '1.05rem' }}>{drop.companyName}</div>
+          <div style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+             {drop.addressId ? 'Delivery Address' : 'No Address'}
+          </div>
+          <div style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '4px' }}>
+            {drop.orderCount} order{drop.orderCount !== 1 && 's'} • {drop.totalMeals} meal{drop.totalMeals !== 1 && 's'}
+          </div>
+        </div>
+
+        {drop.status === 'DELIVERED' && drop.deliveredAt && (
+          <div style={{ marginTop: '8px' }}>
+            <div style={{ fontSize: '0.9rem', color: '#0f172a' }}>Delivered {new Date(drop.deliveredAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+            {drop.onTime ? (
+               <div style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 500, display: 'inline-block', marginTop: '4px' }}>On time</div>
+            ) : (
+               <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 500, display: 'inline-block', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                 <AlertTriangle size={12}/> Late delivery
+               </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '12px', marginTop: '4px' }}>
+          {drop.status === 'WAITING_ON_KITCHEN' && (
+             <div style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '8px' }}>
+                Kitchen Prep: {drop.completedCombinations} / {drop.totalCombinations}
+             </div>
+          )}
+
+          {drop.status !== 'DELIVERED' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <select 
+                value={drop.driverId || ''} 
+                onChange={e => assignDriver(drop.id, Number(e.target.value))}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', color: '#0f172a', appearance: 'none', background: '#f8fafc' }}
+              >
+                <option value="" disabled>Select Driver</option>
+                {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+              
+              {drop.status === 'WAITING_ON_KITCHEN' && drop.isReady && (
+                <button onClick={() => updateStatus(drop.id, 'READY_TO_LEAVE')} style={{ width: '100%', padding: '10px', background: '#7e22ce', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
+                  Mark Packed
+                </button>
+              )}
+              {drop.status === 'READY_TO_LEAVE' && (
+                <button disabled={!drop.driverId} onClick={() => updateStatus(drop.id, 'OUT_FOR_DELIVERY')} style={{ width: '100%', padding: '10px', background: drop.driverId ? '#15803d' : '#94a3b8', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: drop.driverId ? 'pointer' : 'not-allowed' }}>
+                  <Truck size={18} /> Mark out for delivery
+                </button>
+              )}
+              {drop.status === 'OUT_FOR_DELIVERY' && (
+                <button onClick={() => updateStatus(drop.id, 'DELIVERED')} style={{ width: '100%', padding: '10px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <CheckCircle size={18} /> Mark Delivered
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: '0.95rem', color: '#0f172a' }}>{drop.driver?.name || 'Unknown Driver'}</div>
+          )}
         </div>
       </div>
+    );
+  };
 
-      {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}>
-          <div className="spinner" style={{ width: '32px', height: '32px' }}></div>
+  return (
+    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {/* Optional: Add a top bar if layout doesn't provide it */}
+      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        
+        {/* Summary Strip */}
+        <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <SummaryCard title="DROPS" count={drops.length} />
+          <SummaryCard title="WAITING ON KITCHEN" count={waiting.length} subtext="drops waiting for food" />
+          <SummaryCard title="READY TO LEAVE" count={ready.length} />
+          <SummaryCard title="OUT FOR DELIVERY" count={out.length} />
+          <SummaryCard title="DELIVERED" count={delivered.length} subtext={`${delivered.filter(d => d.onTime).length} on time`} />
+          <SummaryCard title="NO DRIVER" count={noDriver.length} subtext="ready, unassigned" />
         </div>
-      ) : drops.length === 0 ? (
-        <div className="premium-card" style={{ textAlign: 'center', padding: '60px 40px' }}>
-          <Truck size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-          <h3>No Drops for {date}</h3>
-          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Click &quot;Generate Drops&quot; to group confirmed orders into deliveries.</p>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '24px' }}>
-          {drops.map(drop => {
-            const companyName = drop.orders[0]?.employee.company.name || 'Unknown Company';
-            const addresses = drop.orders[0]?.employee.company.addresses || [];
-            const address = addresses.find((a: any) => a.id === drop.addressId) || addresses[0];
-            const totalItems = drop.orders.length;
-            const totalValue = drop.orders.reduce((sum, o) => sum + o.totalAmount, 0) / 100;
 
-            let statusColor = '#94a3b8';
-            let statusBg = '#f1f5f9';
-            if (drop.status === 'DISPATCHED') { statusColor = '#eab308'; statusBg = '#fef9c3'; }
-            if (drop.status === 'OUT_FOR_DELIVERY') { statusColor = '#3b82f6'; statusBg = '#dbeafe'; }
-            if (drop.status === 'DELIVERED') { statusColor = '#22c55e'; statusBg = '#dcfce7'; }
-
-            return (
-              <div key={drop.id} className="premium-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <h3 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{companyName}</h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                      <Clock size={14} /> {drop.deliveryTime}
-                    </div>
-                  </div>
-                  <span style={{ 
-                    padding: '4px 12px', 
-                    borderRadius: '20px', 
-                    fontSize: '0.75rem', 
-                    fontWeight: 700, 
-                    color: statusColor, 
-                    background: statusBg 
-                  }}>
-                    {drop.status}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px', background: 'var(--bg-light)', borderRadius: '8px' }}>
-                  <MapPin size={16} color="var(--primary)" style={{ marginTop: '2px' }} />
-                  <div>
-                    <p style={{ fontWeight: 500, fontSize: '0.9rem' }}>{address?.label || 'Delivery Address'}</p>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{address?.address || 'No address specified'}</p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Orders: <strong style={{ color: 'var(--text-main)' }}>{totalItems}</strong></span>
-                  <span style={{ color: 'var(--text-muted)' }}>Value: <strong style={{ color: 'var(--text-main)' }}>${totalValue.toFixed(2)}</strong></span>
-                </div>
-
-                <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {drop.status === 'PENDING' && (
-                      <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => updateDropStatus(drop.id, 'DISPATCHED')}>
-                        Dispatch Orders
-                      </button>
-                    )}
-                    {drop.status === 'DISPATCHED' && (
-                      <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => updateDropStatus(drop.id, 'OUT_FOR_DELIVERY')}>
-                        Mark Out For Delivery
-                      </button>
-                    )}
-                    {drop.status === 'OUT_FOR_DELIVERY' && (
-                      <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => updateDropStatus(drop.id, 'DELIVERED')}>
-                        <CheckCircle size={16} /> Mark Delivered
-                      </button>
-                    )}
-                  </div>
-                </div>
+        {/* Board Columns */}
+        <div style={{ display: 'flex', gap: '24px', overflowX: 'auto', paddingBottom: '24px', alignItems: 'flex-start' }}>
+          
+          {/* Waiting on kitchen */}
+          <div style={{ flex: 1, minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <ChefHat size={20} color="#0f172a" />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Waiting on kitchen</h3>
+                <span style={{ background: '#e2e8f0', color: '#0f172a', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600 }}>{waiting.length}</span>
               </div>
-            );
-          })}
+              <p style={{ color: '#64748b', fontSize: '0.85rem', margin: 0, lineHeight: 1.4 }}>Orders still being cooked. They become a drop when ready.</p>
+            </div>
+            
+            {waiting.length === 0 ? (
+              <div style={{ background: '#f1f5f9', border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '32px 24px', textAlign: 'center', color: '#64748b', fontSize: '0.95rem' }}>
+                Every confirmed order is kitchen-ready.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {waiting.map(renderCard)}
+              </div>
+            )}
+          </div>
+
+          {/* Ready to leave */}
+          <div style={{ flex: 1, minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <Box size={20} color="#7e22ce" />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Ready to leave</h3>
+                <span style={{ background: '#e2e8f0', color: '#0f172a', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600 }}>{ready.length}</span>
+              </div>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', margin: 0, lineHeight: 1.4 }}>Packed and awaiting a driver for delivery.</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {ready.map(renderCard)}
+            </div>
+          </div>
+
+          {/* Out for delivery */}
+          <div style={{ flex: 1, minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <Truck size={20} color="#2563eb" />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Out for delivery</h3>
+                <span style={{ background: '#e2e8f0', color: '#0f172a', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600 }}>{out.length}</span>
+              </div>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', margin: 0, lineHeight: 1.4 }}>Currently in transit to the customer.</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {out.map(renderCard)}
+            </div>
+          </div>
+
+          {/* Delivered */}
+          <div style={{ flex: 1, minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <CheckCircle size={20} color="#16a34a" />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Delivered</h3>
+                <span style={{ background: '#e2e8f0', color: '#0f172a', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600 }}>{delivered.length}</span>
+              </div>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', margin: 0, lineHeight: 1.4 }}>Only the driver can deliver.</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {delivered.map(renderCard)}
+            </div>
+          </div>
+
         </div>
-      )}
+      </div>
     </div>
   );
 }

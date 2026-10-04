@@ -4,13 +4,17 @@ import { api } from '@/lib/api';
 import SettingsForm from './SettingsForm';
 import PricingTiersClient from './PricingTiersClient';
 import AddStationDialog from '@/components/admin/AddStationDialog';
+import RolesClient from './RolesClient';
+import { Shield } from 'lucide-react';
 
 export default async function SettingsPage() {
-  const [me, settings, tiers, stations] = await Promise.all([
+  const [me, settings, tiers, stations, roles, permissions] = await Promise.all([
     api.get('/auth/me').catch(() => null),
     api.get('/settings').catch(() => ({})),
     api.get('/pricing/tiers').catch(() => []),
-    api.get('/catalogue/stations').catch(() => [])
+    api.get('/catalogue/stations').catch(() => []),
+    api.get('/settings/roles').catch(() => []),
+    api.get('/settings/permissions').catch(() => [])
   ]);
 
   return (
@@ -59,6 +63,13 @@ export default async function SettingsPage() {
             Manage pricing adjustments applied to companies assigned to these tiers.
           </p>
           <PricingTiersClient tiers={tiers} />
+        </div>
+
+        <div className="premium-card h-fit">
+          <h3 style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Shield size={18} /> Access Control
+          </h3>
+          <RolesClient initialRoles={roles} initialPermissions={permissions} />
         </div>
 
         <div className="premium-card h-fit">
