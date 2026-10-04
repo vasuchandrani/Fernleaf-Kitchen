@@ -141,7 +141,7 @@ export default function DispatchPage() {
             {drop.onTime ? (
                <div style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 500, display: 'inline-block', marginTop: '4px' }}>On time</div>
             ) : (
-               <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 500, display: 'inline-block', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+               <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 500, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                  <AlertTriangle size={12}/> Late delivery
                </div>
             )}
