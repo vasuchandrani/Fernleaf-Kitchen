@@ -44,7 +44,7 @@ export default function AddCompanyDialog() {
 
       {isOpen && (
         <div
-          className="glass-overlay animate-fade-in"
+          className="glass-overlay animate-fade-in" onClick={(e) => { if(e.target === e.currentTarget) setIsOpen(false); }}
           style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
         >
           <div className="premium-card" style={{ width: '100%', maxWidth: '450px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }}>

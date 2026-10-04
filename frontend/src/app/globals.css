@@ -172,8 +172,8 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes modalIn {
@@ -182,11 +182,11 @@ body {
 }
 
 .admin-theme .animate-fade-in {
-  animation: fadeIn 0.4s ease forwards;
+  animation: fadeIn 0.3s ease forwards;
 }
 
 .admin-theme .glass-overlay .premium-card {
-  animation: modalIn 0.25s ease forwards;
+  animation: modalIn 0.3s ease forwards;
 }
 
 .admin-theme .spinner {
@@ -248,6 +248,9 @@ body {
   align-items: center;
   gap: 10px;
 }
+.admin-kitchen-nav { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; }
+.admin-kitchen-nav a { display: block; padding: 11px 14px; border-radius: 10px; color: var(--text-muted); text-decoration: none; font-size: .92rem; }
+.admin-kitchen-nav a.active { background: #ecfdf5; color: var(--primary); font-weight: 600; }
 
 .admin-theme .icon-button {
   padding: 10px;
@@ -352,3 +355,9 @@ body {
 .floating-cart-button strong { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #d1fae5; color: #065f46; font-size: .75rem; }
 .floating-cart-button b { font-size: .9rem; }
 @media (max-width: 760px) { .menu-category-rail { position: static; border-right: 0; border-bottom: 1px solid var(--border); display: flex; gap: 6px; overflow-x: auto; padding: 0 0 10px; } .menu-category-label { display: none; } .menu-category { white-space: nowrap; width: auto; } .floating-cart-button { right: 16px; bottom: 16px; } }
+
+
+/* QA FIX: Lock background scroll when dialog is open */
+body:has(.glass-overlay) {
+  overflow: hidden;
+}

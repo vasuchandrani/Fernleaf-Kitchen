@@ -20,7 +20,7 @@ export function EditCompanyButton({ company }: { company: { id: number; name: st
   };
   return <>
     <button className="btn-secondary icon-button" onClick={() => setOpen(true)} aria-label={`Edit ${company.name}`}><Edit3 size={15} /></button>
-    {open && <div className="glass-overlay" style={overlay}><form className="premium-card" onSubmit={save} style={dialog}><h3>Edit company</h3><input className="input-field" value={name} onChange={e => setName(e.target.value)} required /><input className="input-field" type="email" value={billingEmail} onChange={e => setBillingEmail(e.target.value)} required />{error && <p style={{ color: '#b42318' }}>{error}</p>}<div style={actions}><button type="button" className="btn-secondary" onClick={() => setOpen(false)}>Cancel</button><button className="btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></div></form></div>}
+    {open && <div className="glass-overlay" style={overlay} onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}><form className="premium-card" onSubmit={save} style={dialog}><h3>Edit company</h3><input className="input-field" value={name} onChange={e => setName(e.target.value)} required /><input className="input-field" type="email" value={billingEmail} onChange={e => setBillingEmail(e.target.value)} required />{error && <p style={{ color: '#b42318' }}>{error}</p>}<div style={actions}><button type="button" className="btn-secondary" onClick={() => setOpen(false)}>Cancel</button><button className="btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></div></form></div>}
   </>;
 }
 
@@ -37,7 +37,7 @@ export function DeleteCompanyButton({ companyId, companyName }: { companyId: num
   return <>
     <button className="btn-secondary icon-button" onClick={() => { setError(''); setOpen(true); }} disabled={busy} aria-label={`Delete ${companyName}`}><Trash2 size={15} /></button>
     {open && <ConfirmationDialog title={`Delete ${companyName}?`} description="This removes the company, its employees, and its order history. This action cannot be undone." confirmLabel="Delete company" busy={busy} onConfirm={remove} onCancel={() => setOpen(false)} />}
-    {error && <div className="glass-overlay" style={overlay}><div className="premium-card" style={dialog}><h3>Company could not be deleted</h3><p style={{ color: '#b42318' }}>{error}</p><button className="btn-primary" onClick={() => setError('')}>Close</button></div></div>}
+    {error && <div className="glass-overlay" style={overlay} onClick={(e) => { if (e.target === e.currentTarget) setError(''); }}><div className="premium-card" style={dialog}><h3>Company could not be deleted</h3><p style={{ color: '#b42318' }}>{error}</p><button className="btn-primary" onClick={() => setError('')}>Close</button></div></div>}
   </>;
 }
 

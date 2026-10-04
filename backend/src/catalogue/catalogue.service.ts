@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDishDto } from './dto/create-dish.dto';
 import { UpdateDishDto } from './dto/update-dish.dto';
@@ -16,7 +16,8 @@ export class CreateStationDto {
 export class CreateOptionGroupDto {
   name: string;
   isRequired: boolean;
-  displayOrder: number;
+  displayOrder?: number;
+  tierId?: number;
 }
 
 export class AddOptionToGroupDto {
@@ -31,6 +32,13 @@ export class CatalogueService {
   async createDish(data: CreateDishDto) {
     const { options, tierId, ...dishData } = data;
     try {
+      const [category, station] = await Promise.all([
+        this.prisma.category.findUnique({ where: { id: data.categoryId } }),
+        data.kitchenStationId
+          ? this.prisma.kitchenStation.findUnique({ where: { id: data.kitchenStationId } })
+          : Promise.resolve(null),
+      ]);
+      if (!category) throw new NotFoundException('Category not found');
       if (!options || options.length === 0) {
         const dish = await this.prisma.dish.create({ data: dishData });
         await this.attachDishToCatalogues(dish.id, tierId);
@@ -113,16 +121,19 @@ export class CatalogueService {
       where: includeInactive ? {} : { isActive: true },
       include: {
         kitchenStation: true,
+        category: true,
       },
     });
   }
 
-  async findOneDish(id: number) {
+  async findOneDish(id: number, tierId?: number) {
+    const tier = tierId ? await this.prisma.priceTier.findUnique({ where: { id: tierId } }) : null;
     const dish = await this.prisma.dish.findUnique({
       where: { id },
       include: {
         kitchenStation: true,
         optionGroups: {
+          where: tierId ? { OR: [{ priceTierId: null }, { priceTierId: tierId }] } : undefined,
           include: {
             options: {
               include: {
@@ -194,16 +205,52 @@ export class CatalogueService {
     return this.prisma.kitchenStation.findMany();
   }
 
+  async createCategory(data: { name: string }) {
+    const name = data.name?.trim();
+    if (!name) throw new BadRequestException('Category name is required');
+    try {
+      return await this.prisma.category.create({ data: { name } });
+    } catch (error: any) {
+      if (error.code === 'P2002') throw new ConflictException('A category with this name already exists');
+      throw error;
+    }
+  }
+
+  async findAllCategories() {
+    return this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+  }
+
   async createOptionGroup(dishId: number, data: CreateOptionGroupDto) {
     await this.prisma.dish.findUniqueOrThrow({ where: { id: dishId } });
+    const tier = data.tierId
+      ? await this.prisma.priceTier.findUnique({ where: { id: data.tierId } })
+      : null;
+    if (data.tierId && !tier) throw new NotFoundException('Catalogue not found');
     return this.prisma.optionGroup.create({
       data: {
         dishId,
         name: data.name,
         isRequired: data.isRequired,
-        displayOrder: data.displayOrder
+        displayOrder: data.displayOrder ?? 1,
+        priceTierId: tier?.isDefault ? null : (data.tierId ?? null),
       }
     });
+  }
+
+  async deleteOptionGroup(dishId: number, groupId: number) {
+    const group = await this.prisma.optionGroup.findFirst({
+      where: { id: groupId, dishId },
+    });
+    if (!group) {
+      throw new NotFoundException(`Option group ${groupId} does not belong to dish ${dishId}`);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.optionGroupOption.deleteMany({ where: { optionGroupId: groupId } }),
+      this.prisma.optionGroup.delete({ where: { id: groupId } }),
+    ]);
+
+    return { success: true };
   }
 
   async addOptionToGroup(dishId: number, groupId: number, data: AddOptionToGroupDto) {

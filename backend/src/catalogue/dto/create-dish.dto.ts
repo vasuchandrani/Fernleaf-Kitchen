@@ -30,6 +30,7 @@ export class CreateDishDto {
 
   @IsString()
   @IsEnum(['HOT', 'COLD'])
+  @IsOptional()
   temperature: string;
 
   @IsInt()
@@ -44,6 +45,14 @@ export class CreateDishDto {
   @IsInt()
   @IsOptional()
   kitchenStationId?: number;
+
+  @IsInt()
+  @IsNotEmpty()
+  categoryId: number;
+
+  @IsString()
+  @IsEnum(['VEG', 'NON_VEG'])
+  dietaryType: string;
 
   @IsOptional()
   @IsInt()

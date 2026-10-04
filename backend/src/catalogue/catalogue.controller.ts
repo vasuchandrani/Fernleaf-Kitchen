@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Delete, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { CatalogueService, CreateOptionDto, CreateStationDto, CreateOptionGroupDto, AddOptionToGroupDto } from './catalogue.service';
 import { CreateDishDto } from './dto/create-dish.dto';
 import { UpdateDishDto } from './dto/update-dish.dto';
@@ -22,8 +22,8 @@ export class CatalogueController {
 
   @Get(':id')
   @RequirePermissions('catalogue.read')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.catalogueService.findOneDish(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Query('tierId') tierId?: string) {
+    return this.catalogueService.findOneDish(id, tierId ? Number(tierId) : undefined);
   }
 
   @Patch(':id')
@@ -45,6 +45,15 @@ export class CatalogueController {
     @Body() dto: CreateOptionGroupDto
   ) {
     return this.catalogueService.createOptionGroup(dishId, dto);
+  }
+
+  @Delete(':id/option-groups/:groupId')
+  @RequirePermissions('catalogue.write')
+  deleteOptionGroup(
+    @Param('id', ParseIntPipe) dishId: number,
+    @Param('groupId', ParseIntPipe) groupId: number,
+  ) {
+    return this.catalogueService.deleteOptionGroup(dishId, groupId);
   }
 
   @Post(':id/option-groups/:groupId/options')
@@ -101,5 +110,26 @@ export class StationsController {
   @RequirePermissions('catalogue.read')
   findAll() {
     return this.catalogueService.findAllStations();
+  }
+}
+
+export class CreateCategoryDto {
+  name: string;
+}
+
+@Controller('catalogue/categories')
+export class CategoriesController {
+  constructor(private readonly catalogueService: CatalogueService) {}
+
+  @Get()
+  @RequirePermissions('catalogue.read')
+  findAll() {
+    return this.catalogueService.findAllCategories();
+  }
+
+  @Post()
+  @RequirePermissions('catalogue.write')
+  create(@Body() dto: CreateCategoryDto) {
+    return this.catalogueService.createCategory(dto);
   }
 }

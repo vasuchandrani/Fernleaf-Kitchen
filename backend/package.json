@@ -84,8 +84,5 @@
     "transformIgnorePatterns": [
       "/node_modules/(?!@nestjs)"
     ]
-  },
-  "prisma": {
-    "seed": "ts-node prisma/seed.ts"
   }
 }

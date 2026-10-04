@@ -45,7 +45,7 @@ export default function ChangeTierDialog({ companyId, currentTierId, tiers = [] 
       </button>
 
       {isOpen && (
-        <div className="glass-overlay animate-fade-in" style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="glass-overlay animate-fade-in" onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="premium-card" style={{ width: '100%', maxWidth: '400px' }}>
             <h3 style={{ marginBottom: '16px' }}>Change Pricing Tier</h3>
             

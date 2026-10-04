@@ -46,10 +46,18 @@ export class PricingService {
     if (!company) throw new NotFoundException('Company not found');
     
     const activeDishes = await this.prisma.dish.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        catalogueMemberships: company.priceTierId
+          ? { some: { tierId: company.priceTierId } }
+          : undefined,
+      },
       include: {
          prices: { where: { tierId: company.priceTierId || -1 } },
          optionGroups: {
+           where: company.priceTierId
+             ? { OR: [{ priceTierId: null }, { priceTierId: company.priceTierId }] }
+             : { priceTierId: null },
            include: {
              options: {
                include: {
@@ -80,7 +88,14 @@ export class PricingService {
            finalPrice = this.calculateDerivedPrice(dish.costPrice, company.priceTier);
          }
 
-         const optionGroups = dish.optionGroups.map(og => ({
+         const groupsByName = new Map<string, typeof dish.optionGroups[number]>();
+         for (const group of dish.optionGroups) {
+           const existing = groupsByName.get(group.name);
+           if (!existing || (group.priceTierId === company.priceTierId && group.priceTierId !== null)) {
+             groupsByName.set(group.name, group);
+           }
+         }
+         const optionGroups = [...groupsByName.values()].map(og => ({
            id: og.id,
            name: og.name,
            isRequired: og.isRequired,
@@ -90,8 +105,6 @@ export class PricingService {
              let optFinalPrice = opt.costPrice;
              if (optOverride) {
                optFinalPrice = optOverride.price;
-             } else if (company.priceTier) {
-               optFinalPrice = this.calculateDerivedPrice(opt.costPrice, company.priceTier);
              }
              return {
                id: opt.id,
@@ -270,6 +283,7 @@ export class PricingService {
       where: { catalogueMemberships: { some: { tierId } } },
       include: {
         kitchenStation: true,
+        category: true,
         prices: { where: { tierId } },
         optionGroups: {
           include: {

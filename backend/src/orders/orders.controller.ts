@@ -17,8 +17,8 @@ export class OrdersController {
 
   @Get()
   @RequirePermissions('order.read')
-  findAll(@Query('status') status?: string) {
-    return this.ordersService.findAllOrders(status);
+  findAll(@Query('status') status?: string, @Query('deliveryDate') deliveryDate?: string) {
+    return this.ordersService.findAllOrders(status, deliveryDate);
   }
 
   @Post('checkout')
@@ -49,7 +49,7 @@ export class OrdersController {
   @RequirePermissions('order.write')
   updateOrderDetails(
     @Param('id', ParseIntPipe) id: number,
-    @Body() data: { deliveryTime?: string; deliveryDate?: string; status?: string }
+    @Body() data: { deliveryTime?: string; deliveryDate?: string; status?: string; lines?: CreateOrderDto['lines'] }
   ) {
     return this.ordersService.updateOrderDetails(id, data);
   }
@@ -61,6 +61,6 @@ export class OrdersController {
     @Param('comboId', ParseIntPipe) comboId: number,
     @Body('kitchenStatus') kitchenStatus: string
   ) {
-    return this.ordersService.updateKitchenStatus(comboId, kitchenStatus);
+    return this.ordersService.updateKitchenStatus(id, comboId, kitchenStatus);
   }
 }

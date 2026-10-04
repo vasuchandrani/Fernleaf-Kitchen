@@ -18,7 +18,9 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All dishes');
+  const [dietaryFilter, setDietaryFilter] = useState<'ALL' | 'VEG' | 'NON_VEG'>('ALL');
   const [addedDishIds, setAddedDishIds] = useState<Record<number, number>>({});
+  const [editingCartId, setEditingCartId] = useState<string | null>(null);
 
   useEffect(() => {
     const cutoffDays = settings.cutoff_days_before ?? 2;
@@ -36,14 +38,15 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
   const filteredCatalogue = useMemo(() => {
     const categoryFiltered = activeCategory === 'All dishes'
       ? catalogue
-      : catalogue.filter((d: any) => (d.category || d.station?.name || (d.temperature === 'COLD' ? 'Cold kitchen' : 'Hot kitchen')) === activeCategory);
-    if (!searchQuery) return categoryFiltered;
+      : catalogue.filter((d: any) => d.category?.name === activeCategory);
+    const dietaryFiltered = dietaryFilter === 'ALL' ? categoryFiltered : categoryFiltered.filter((d: any) => d.dietaryType === dietaryFilter);
+    if (!searchQuery) return dietaryFiltered;
     const q = searchQuery.toLowerCase();
-    return categoryFiltered.filter((d: any) => d.name.toLowerCase().includes(q) || d.sku?.toLowerCase().includes(q));
-  }, [catalogue, searchQuery, activeCategory]);
+    return dietaryFiltered.filter((d: any) => d.name.toLowerCase().includes(q) || d.sku?.toLowerCase().includes(q));
+  }, [catalogue, searchQuery, activeCategory, dietaryFilter]);
 
   const categories = useMemo(() => {
-    const names = catalogue.map((d: any) => d.category || d.station?.name || (d.temperature === 'COLD' ? 'Cold kitchen' : 'Hot kitchen'));
+    const names = catalogue.map((d: any) => d.category?.name).filter(Boolean);
     return ['All dishes', ...Array.from(new Set(names))];
   }, [catalogue]);
 
@@ -57,7 +60,7 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
     if (!activeDish) return;
     for (const group of activeDish.optionGroups || []) {
       if (group.isRequired && !selectedOptions[group.id]) {
-        alert(`Please select an option for "${group.name}"`);
+        setError(`Please select an option for "${group.name}"`);
         return;
       }
     }
@@ -79,12 +82,30 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
       employeeId: '',
     }));
 
-    setCart([...cart, ...newItems]);
+    if (editingCartId) {
+      setCart(cart.map(item => item.id === editingCartId ? { ...item, selectedOptions: flatOptions } : item));
+      setEditingCartId(null);
+    } else {
+      setCart([...cart, ...newItems]);
+    }
     setAddedDishIds(current => ({ ...current, [activeDish.id]: (current[activeDish.id] || 0) + quantity }));
     setActiveDish(null);
   };
 
   const removeFromCart = (id: string) => setCart(cart.filter(c => c.id !== id));
+  const removeOneDish = (dishId: number) => {
+    const item = [...cart].reverse().find(cartItem => cartItem.dish.id === dishId);
+    if (!item) return;
+    removeFromCart(item.id);
+    setAddedDishIds(current => {
+      const next = (current[dishId] || 0) - 1;
+      if (next <= 0) {
+        const { [dishId]: _removed, ...rest } = current;
+        return rest;
+      }
+      return { ...current, [dishId]: next };
+    });
+  };
   const updateCartEmployee = (id: string, empId: string) => setCart(cart.map(c => c.id === id ? { ...c, employeeId: empId } : c));
   const assignAllToEmployee = (empId: string) => setCart(cart.map(c => ({ ...c, employeeId: empId })));
 
@@ -183,14 +204,24 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
       {step === 1 ? (
         /* ====== STEP 1: MENU BROWSING ====== */
         <>
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{ position: 'relative', maxWidth: '400px' }}>
+          <div style={{ marginBottom: '20px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', maxWidth: '400px', flex: '1 1 320px' }}>
               <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text" placeholder="Search dishes..." value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="input-field" style={{ paddingLeft: '36px', padding: '10px 14px 10px 36px' }}
               />
+            </div>
+            <button className="btn-secondary" onClick={() => setStep(2)} disabled={cart.length === 0}>
+              <ShoppingCart size={16} /> View cart {cart.length > 0 ? `(${cart.length})` : ''}
+            </button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              {(['ALL', 'VEG', 'NON_VEG'] as const).map(value => (
+                <button key={value} className={dietaryFilter === value ? 'filter-chip active' : 'filter-chip'} onClick={() => setDietaryFilter(value)}>
+                  {value === 'ALL' ? 'All dishes' : value === 'VEG' ? 'Vegetarian' : 'Non-vegetarian'}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -200,7 +231,7 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
               {categories.map(category => (
                 <button key={category} className={activeCategory === category ? 'menu-category active' : 'menu-category'} onClick={() => setActiveCategory(category)}>
                   <span>{category}</span>
-                  <small>{category === 'All dishes' ? catalogue.length : catalogue.filter((d: any) => (d.category || d.station?.name || (d.temperature === 'COLD' ? 'Cold kitchen' : 'Hot kitchen')) === category).length}</small>
+                  <small>{category === 'All dishes' ? catalogue.length : catalogue.filter((d: any) => d.category?.name === category).length}</small>
                 </button>
               ))}
             </aside>
@@ -211,11 +242,11 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
                 style={{ cursor: 'pointer', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{
                   marginLeft: 'auto',
-                  background: dish.temperature === 'HOT' ? '#fef3c7' : '#e0f2fe',
-                  color: dish.temperature === 'HOT' ? '#d97706' : '#0284c7',
+                  background: dish.dietaryType === 'NON_VEG' ? '#fff1f2' : '#ecfdf5',
+                  color: dish.dietaryType === 'NON_VEG' ? '#be123c' : '#047857',
                   padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 700,
                 }}>
-                  {dish.temperature}
+                  {dish.dietaryType === 'NON_VEG' ? 'NON-VEG' : 'VEG'}
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
@@ -237,9 +268,33 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
                   <span style={{ color: 'var(--primary)', fontWeight: 800, fontSize: '1.15rem' }}>
                     ${(dish.finalPrice / 100).toFixed(2)}
                   </span>
-                  <span style={{ color: addedDishIds[dish.id] ? '#047857' : 'var(--primary)', fontSize: '0.8rem', fontWeight: 700 }}>
-                  {addedDishIds[dish.id] ? <><Check size={14} style={{ display: 'inline', verticalAlign: 'text-bottom' }} /> Added {addedDishIds[dish.id]}</> : <><Plus size={14} style={{ display: 'inline', verticalAlign: 'text-bottom' }} /> Add</>}
-                  </span>
+                  {addedDishIds[dish.id] ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        aria-label={`Remove one ${dish.name}`}
+                        onClick={event => { event.stopPropagation(); removeOneDish(dish.id); }}
+                        style={{ width: '28px', height: '28px', border: '1px solid #a7f3d0', borderRadius: '7px', background: '#f0fdf4', color: '#047857', cursor: 'pointer', fontWeight: 800 }}
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span style={{ color: '#047857', fontSize: '0.8rem', fontWeight: 700, minWidth: '66px', textAlign: 'center' }}>
+                        <Check size={14} style={{ display: 'inline', verticalAlign: 'text-bottom' }} /> Added {addedDishIds[dish.id]}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Add another ${dish.name}`}
+                        onClick={event => { event.stopPropagation(); handleDishClick(dish); }}
+                        style={{ width: '28px', height: '28px', border: '1px solid #a7f3d0', borderRadius: '7px', background: '#ecfdf5', color: '#047857', cursor: 'pointer', fontWeight: 800 }}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 700 }}>
+                      <Plus size={14} style={{ display: 'inline', verticalAlign: 'text-bottom' }} /> Add
+                    </span>
+                  )}
                 </div>
               </div>
               {activeDish?.id === dish.id && (
@@ -294,14 +349,6 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
               <h3>No dishes available</h3>
               <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>No dishes found for this company&apos;s price tier.</p>
             </div>
-          )}
-          {step === 1 && cart.length > 0 && (
-            <button className="floating-cart-button" onClick={() => setStep(2)}>
-              <ShoppingCart size={18} />
-              <span>View cart</span>
-              <strong>{cart.length}</strong>
-              <b>${(cartTotal / 100).toFixed(2)}</b>
-            </button>
           )}
         </>
       ) : (
@@ -365,6 +412,23 @@ export default function CompanyOrderFlow({ company, catalogue, settings }: { com
                             <Trash2 size={14} />
                           </button>
                         </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                        <button className="btn-secondary" style={{ padding: '5px 9px', fontSize: '.78rem' }} onClick={() => {
+                          setActiveDish(item.dish);
+                          setEditingCartId(item.id);
+                          const restored: Record<number, any> = {};
+                          item.dish.optionGroups?.forEach((group: any) => {
+                            const selected = item.selectedOptions.filter((option: any) => option.groupName === group.name);
+                            if (group.isRequired) restored[group.id] = group.options.find((option: any) => option.name === selected[0]?.optionName);
+                            else restored[group.id] = selected.map((option: any) => group.options.find((candidate: any) => candidate.name === option.optionName)).filter(Boolean);
+                          });
+                          setSelectedOptions(restored);
+                          setQuantity(1);
+                          setStep(1);
+                        }}>Edit options</button>
+                        <button className="btn-secondary" style={{ padding: '5px 9px', fontSize: '.78rem' }} onClick={() => setCart(current => [...current, { ...item, id: crypto.randomUUID() }])}><Plus size={13} /> Increase</button>
+                        <button className="btn-secondary" style={{ padding: '5px 9px', fontSize: '.78rem' }} onClick={() => removeFromCart(item.id)}><Minus size={13} /> Remove</button>
                       </div>
 
                       {/* Employee Assignment */}

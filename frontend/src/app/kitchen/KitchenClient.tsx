@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { CheckCircle2, Clock3, Flame, Loader2, LogOut, Utensils, type LucideIcon } from 'lucide-react';
-import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Clock3, Flame, Loader2, Utensils, type LucideIcon } from 'lucide-react';
 
 type KitchenStatus = 'NOT_STARTED' | 'STARTED' | 'DONE';
 type Combo = {
@@ -13,6 +12,7 @@ type Combo = {
   kitchenStatus?: KitchenStatus;
   options?: { optionName: string }[];
 };
+const orderDateInput = (value: string) => value.slice(0, 10);
 type Line = {
   id: number;
   dishName: string;
@@ -35,24 +35,45 @@ const toDateInput = (value: Date) => {
 };
 const money = (cents: number) => `₹${(cents / 100).toFixed(2)}`;
 
-export default function KitchenClient({ initialOrders }: { initialOrders: Order[] }) {
-  const [tab, setTab] = useState<'dashboard' | 'orders'>('dashboard');
+export default function KitchenClient({ initialOrders, activeTab = 'dashboard' }: { initialOrders: Order[]; activeTab?: 'dashboard' | 'orders' }) {
   const [selectedDate, setSelectedDate] = useState(toDateInput(new Date()));
+  const [orders, setOrders] = useState<Order[]>(initialOrders);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [station, setStation] = useState('all');
   const [status, setStatus] = useState<'all' | KitchenStatus>('all');
   const [search, setSearch] = useState('');
   const [loadingCombo, setLoadingCombo] = useState<number | null>(null);
   const [error, setError] = useState('');
-  const today = toDateInput(new Date());
-  const isToday = selectedDate === today;
+  const isToday = selectedDate === toDateInput(new Date());
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingOrders(true);
+    fetch(`/api/proxy/orders?status=CONFIRMED&deliveryDate=${selectedDate}`, { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('Could not load confirmed orders.');
+        return response.json();
+      })
+      .then(data => {
+        if (!cancelled) setOrders(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setOrders([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOrders(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
 
   const confirmedOrders = useMemo(
-    () => initialOrders.filter(order => order.status === 'CONFIRMED' && toDateInput(new Date(order.deliveryDate)) === selectedDate),
-    [initialOrders, selectedDate],
+    () => orders.filter(order => order.status === 'CONFIRMED'),
+    [orders],
   );
   const stations = useMemo(() => {
-    const values = confirmedOrders.flatMap(order => order.lines?.map(line => line.kitchenStation?.name).filter(Boolean) ?? []);
-    return [...new Set(values)] as string[];
+    const values = confirmedOrders.flatMap(order => order.lines?.map(line => line.kitchenStation?.name ?? 'Unassigned station') ?? []);
+    return [...new Set(values)];
   }, [confirmedOrders]);
   const rows = useMemo(() => confirmedOrders.flatMap(order => (order.lines ?? []).flatMap(line =>
     (line.combinations ?? []).map(combo => ({ order, line, combo })),
@@ -90,37 +111,18 @@ export default function KitchenClient({ initialOrders }: { initialOrders: Order[
   };
 
   return (
-    <main className="admin-theme" style={{ minHeight: '100vh', padding: '32px clamp(18px, 4vw, 56px)' }}>
-      <header className="page-heading" style={{ marginBottom: '24px' }}>
-        <div>
-          <span className="page-eyebrow">Kitchen workspace</span>
-          <h1>Kitchen</h1>
-          <p>Prepare confirmed orders and hand completed dishes to packing.</p>
-        </div>
-        <Link href="/api/auth/logout" aria-label="Log out" style={{ color: 'var(--text-muted)' }}><LogOut size={18} /></Link>
-      </header>
-
-      <nav style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--border)', marginBottom: '24px' }} aria-label="Kitchen sections">
-        {(['dashboard', 'orders'] as const).map(item => (
-          <button key={item} onClick={() => setTab(item)} className={tab === item ? 'filter-chip active' : 'filter-chip'}>
-            {item === 'dashboard' ? 'Dashboard' : 'Orders'}
-          </button>
-        ))}
-      </nav>
-
+    <>
       <section className="premium-card" style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', alignItems: 'end' }}>
           <label style={{ display: 'grid', gap: '6px', minWidth: '190px' }}>
             <span className="field-label">Service date</span>
             <input className="input-field" type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} />
           </label>
-          <div style={{ color: 'var(--text-muted)', fontSize: '.86rem' }}>
-            {isToday ? 'Today — kitchen actions are enabled.' : 'Review only — actions are available on today’s orders.'}
-          </div>
+          {loadingOrders && <Loader2 size={17} className="spin" aria-label="Loading confirmed orders" />}
         </div>
       </section>
 
-      {tab === 'dashboard' ? (
+      {activeTab === 'dashboard' ? (
         <section>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '14px', marginBottom: '20px' }}>
             {([
@@ -139,7 +141,7 @@ export default function KitchenClient({ initialOrders }: { initialOrders: Order[
           </div>
           <div className="premium-card">
             <h2 style={{ fontSize: '1.15rem', marginBottom: '14px' }}>Station workload</h2>
-            {stations.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>No confirmed orders for this date.</p> : stations.map(name => {
+            {confirmedOrders.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>No confirmed orders for this date.</p> : stations.map(name => {
               const count = rows.filter(row => row.line.kitchenStation?.name === name).reduce((sum, row) => sum + row.combo.quantity, 0);
               return <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}><span>{name}</span><strong>{count} units</strong></div>;
             })}
@@ -156,7 +158,7 @@ export default function KitchenClient({ initialOrders }: { initialOrders: Order[
           </div>
           {error && <div role="alert" style={{ color: '#b42318', marginBottom: '14px' }}>{error}</div>}
           <div style={{ display: 'grid', gap: '12px' }}>
-            {rows.length === 0 ? <div className="premium-card"><p style={{ color: 'var(--text-muted)' }}>No confirmed orders match these filters.</p></div> : rows.map(({ order, line, combo }) => {
+            {loadingOrders ? <div className="premium-card"><p style={{ color: 'var(--text-muted)' }}>Loading confirmed orders…</p></div> : rows.length === 0 ? <div className="premium-card"><p style={{ color: 'var(--text-muted)' }}>No confirmed orders match these filters.</p></div> : rows.map(({ order, line, combo }) => {
               const current = combo.kitchenStatus ?? 'NOT_STARTED';
               return <article className="premium-card" key={combo.id} style={{ display: 'grid', gap: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'start' }}>
@@ -172,6 +174,6 @@ export default function KitchenClient({ initialOrders }: { initialOrders: Order[
           </div>
         </section>
       )}
-    </main>
+    </>
   );
 }

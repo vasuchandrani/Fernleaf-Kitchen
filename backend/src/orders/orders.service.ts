@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 
@@ -21,50 +22,51 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 export class OrdersService {
   constructor(private prisma: PrismaService) {}
 
-  async createOrder(adminId: number, dto: CreateOrderDto) {
-    if (!['DRAFT', 'PLACED'].includes(dto.status)) {
-      throw new BadRequestException('New orders must be DRAFT or PLACED');
-    }
-
-    // Calculate totals automatically from snapshot data
+  private async buildOrderLines(
+    lines: CreateOrderDto['lines'],
+    client: PrismaService | Prisma.TransactionClient = this.prisma,
+  ) {
     let orderTotal = 0;
-
-    const mappedLines = dto.lines.map(line => {
+    const dishIds = [...new Set(lines.map(line => line.dishId))];
+    const dishes = await client.dish.findMany({
+      where: { id: { in: dishIds } },
+      select: { id: true, kitchenStationId: true },
+    });
+    const stationByDish = new Map(dishes.map(dish => [dish.id, dish.kitchenStationId]));
+    const mappedLines = lines.map(line => {
       let lineTotal = 0;
-      
       const mappedCombinations = line.combinations.map(combo => {
-        let comboUnitPrice = line.unitPrice;
-        combo.options.forEach(opt => comboUnitPrice += opt.optionPrice);
-        
+        const comboUnitPrice = line.unitPrice + combo.options.reduce((sum, option) => sum + option.optionPrice, 0);
         const comboTotalPrice = comboUnitPrice * combo.quantity;
         lineTotal += comboTotalPrice;
-
         return {
           quantity: combo.quantity,
           unitPrice: comboUnitPrice,
           totalPrice: comboTotalPrice,
-          options: {
-            create: combo.options
-          }
+          kitchenStationId: stationByDish.get(line.dishId) ?? null,
+          options: { create: combo.options },
         };
       });
-
-      // Sum quantities across all combinations for this line
-      const lineQuantity = line.combinations.reduce((sum, c) => sum + c.quantity, 0);
       orderTotal += lineTotal;
-
       return {
         dishId: line.dishId,
         dishName: line.dishName,
         dishSku: line.dishSku,
         unitPrice: line.unitPrice,
-        quantity: lineQuantity,
-        lineTotal: lineTotal,
-        combinations: {
-          create: mappedCombinations
-        }
+        quantity: line.combinations.reduce((sum, combination) => sum + combination.quantity, 0),
+        lineTotal,
+        combinations: { create: mappedCombinations },
       };
     });
+    return { mappedLines, orderTotal };
+  }
+
+  async createOrder(adminId: number, dto: CreateOrderDto) {
+    if (!['DRAFT', 'PLACED'].includes(dto.status)) {
+      throw new BadRequestException('New orders must be DRAFT or PLACED');
+    }
+
+    const { mappedLines, orderTotal } = await this.buildOrderLines(dto.lines);
 
     return this.prisma.order.create({
       data: {
@@ -121,11 +123,14 @@ export class OrdersService {
    */
   async updateOrderDetails(
     orderId: number,
-    data: { deliveryTime?: string; deliveryDate?: string; status?: string },
+    data: { deliveryTime?: string; deliveryDate?: string; status?: string; lines?: CreateOrderDto['lines'] },
   ) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
 
+    if (data.lines && !['DRAFT', 'PLACED'].includes(order.status)) {
+      throw new BadRequestException('Only draft or placed orders can have their dishes edited');
+    }
     const updateData: any = {};
     if (data.deliveryTime) updateData.deliveryTime = data.deliveryTime;
     if (data.deliveryDate) updateData.deliveryDate = new Date(data.deliveryDate);
@@ -139,20 +144,40 @@ export class OrdersService {
       updateData.status = data.status;
     }
 
-    return this.prisma.order.update({
-      where: { id: orderId },
-      data: updateData,
-      include: {
-        employee: { include: { company: true } },
-        lines: { include: { combinations: { include: { options: true } } } },
-      },
+    if (!data.lines) {
+      return this.prisma.order.update({
+        where: { id: orderId },
+        data: updateData,
+        include: { employee: { include: { company: true } }, lines: { include: { combinations: { include: { options: true } } } } },
+      });
+    }
+    return this.prisma.$transaction(async tx => {
+      const oldLines = await tx.orderLine.findMany({ where: { orderId }, select: { id: true } });
+      const oldCombinations = await tx.orderCombination.findMany({ where: { orderLineId: { in: oldLines.map(line => line.id) } }, select: { id: true } });
+      await tx.combinationOption.deleteMany({ where: { combinationId: { in: oldCombinations.map(combo => combo.id) } } });
+      await tx.orderCombination.deleteMany({ where: { orderLineId: { in: oldLines.map(line => line.id) } } });
+      await tx.orderLine.deleteMany({ where: { orderId } });
+      const { mappedLines, orderTotal } = await this.buildOrderLines(data.lines!, tx);
+      return tx.order.update({
+        where: { id: orderId },
+        data: { ...updateData, totalAmount: orderTotal, lines: { create: mappedLines } },
+        include: { employee: { include: { company: true } }, lines: { include: { combinations: { include: { options: true } } } } },
+      });
     });
   }
 
-  async findAllOrders(status?: string) {
-    let whereClause = {};
-    if (status) {
-      whereClause = { status };
+  async findAllOrders(status?: string, deliveryDate?: string) {
+    const whereClause: { status?: string; deliveryDate?: { gte: Date; lt: Date } } = {};
+    if (status) whereClause.status = status;
+    if (deliveryDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
+        throw new BadRequestException('deliveryDate must be YYYY-MM-DD');
+      }
+      const start = new Date(`${deliveryDate}T00:00:00.000Z`);
+      if (Number.isNaN(start.getTime())) throw new BadRequestException('deliveryDate must be YYYY-MM-DD');
+      const end = new Date(start);
+      end.setUTCDate(end.getUTCDate() + 1);
+      whereClause.deliveryDate = { gte: start, lt: end };
     }
     const orders = await this.prisma.order.findMany({
       where: whereClause,
@@ -203,7 +228,7 @@ export class OrdersService {
     return order;
   }
 
-  async updateKitchenStatus(comboId: number, statusStr: string) {
+  async updateKitchenStatus(orderId: number, comboId: number, statusStr: string) {
     const allowedStatuses = ['NOT_STARTED', 'STARTED', 'DONE'];
     if (!allowedStatuses.includes(statusStr)) {
       throw new BadRequestException('Invalid kitchen status');
@@ -212,7 +237,9 @@ export class OrdersService {
       where: { id: comboId },
       include: { orderLine: { include: { order: true } } },
     });
-    if (!combination) throw new NotFoundException(`Kitchen combination ${comboId} not found`);
+    if (!combination || combination.orderLine.order.id !== orderId) {
+      throw new NotFoundException(`Kitchen combination ${comboId} was not found for order ${orderId}`);
+    }
     if (combination.orderLine.order.status !== 'CONFIRMED') {
       throw new BadRequestException('Only confirmed orders can be prepared');
     }

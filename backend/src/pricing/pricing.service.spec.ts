@@ -9,6 +9,9 @@ describe('PricingService', () => {
     priceTier: {
       findUnique: jest.fn(),
     },
+    dish: {
+      findMany: jest.fn(),
+    },
     dishPrice: {
       findUnique: jest.fn(),
     }
@@ -53,6 +56,21 @@ describe('PricingService', () => {
     it('should apply markup percent correctly', () => {
       const tier = { id: 1, name: 'Tier 4', derivationType: 'MARKUP_PERCENT', derivationValue: 10 }; // 10% markup
       expect(service.calculateDerivedPrice(1000, tier as any)).toBe(1100);
+    });
+
+    describe('getTierDishes', () => {
+      it('returns catalogue dishes when option groups use the current schema', async () => {
+        mockPrismaService.priceTier.findUnique.mockResolvedValue({
+          id: 15,
+          name: 'Tier 1',
+          derivationType: null,
+          derivationValue: null,
+        });
+        mockPrismaService.dish.findMany.mockResolvedValue([]);
+
+        await expect(service.getTierDishes(15)).resolves.toEqual([]);
+        expect(mockPrismaService.dish.findMany).toHaveBeenCalled();
+      });
     });
   });
 });

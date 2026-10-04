@@ -40,7 +40,7 @@ export default function AddEmployeeDialog({ companyId }: { companyId: number }) 
       </button>
 
       {isOpen && (
-        <div className="glass-overlay animate-fade-in" style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+        <div className="glass-overlay animate-fade-in" onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="premium-card" style={{ width: '100%', maxWidth: '420px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
               <h3 style={{ fontSize: '1.2rem' }}>Add Employee</h3>

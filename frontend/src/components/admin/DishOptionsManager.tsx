@@ -1,14 +1,26 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Check, Edit3, Plus, Trash2, X } from 'lucide-react';
 
 type Option = { id: number; name: string; costPrice: number; isActive: boolean };
 type Group = { id: number; name: string; isRequired: boolean; displayOrder: number; options: { id: number; option: Option }[] };
 
-export default function DishOptionsManager({ dish, initialOptions }: { dish: any; initialOptions: Option[] }) {
+async function getRequestError(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null);
+  const message = payload && typeof payload.message === 'string'
+    ? payload.message
+    : Array.isArray(payload?.message)
+      ? payload.message.join(', ')
+      : '';
+  return new Error(message || fallback);
+}
+
+export default function DishOptionsManager({ dish, initialOptions, tierId }: { dish: any; initialOptions: Option[]; tierId?: number }) {
+  const canEditSharedOptions = !tierId;
+  const options = Array.isArray(initialOptions) ? initialOptions : [];
   const [groups, setGroups] = useState<Group[]>(
-    (dish.optionGroups || []).map((group: any) => ({
+    (Array.isArray(dish?.optionGroups) ? dish.optionGroups : []).map((group: any) => ({
       ...group,
       options: Array.isArray(group.options)
         ? group.options.filter((item: any) => item?.option)
@@ -17,13 +29,13 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
   );
   const [groupName, setGroupName] = useState('');
   const [groupRequired, setGroupRequired] = useState(false);
-  const [groupOrder, setGroupOrder] = useState('1');
   const [newOption, setNewOption] = useState({ name: '', price: '' });
   const [selectedOption, setSelectedOption] = useState<Record<number, string>>({});
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingValues, setEditingValues] = useState({ name: '', costPrice: 0 });
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
+  const [confirmGroup, setConfirmGroup] = useState<Group | null>(null);
 
   const createGroup = async () => {
     if (!groupName.trim()) return;
@@ -35,16 +47,33 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
         body: JSON.stringify({
           name: groupName.trim(),
           isRequired: groupRequired,
-          displayOrder: Number(groupOrder) || groups.length + 1,
+          displayOrder: groups.length + 1,
+          ...(tierId ? { tierId } : {}),
         }),
       });
-      if (!response.ok) throw new Error('Could not create the option group');
+      if (!response.ok) throw await getRequestError(response, 'Could not create the option group');
       const createdGroup = await response.json();
-      setGroups(current => [...current, createdGroup]);
+      setGroups(current => [...current, { ...createdGroup, options: Array.isArray(createdGroup.options) ? createdGroup.options : [] }]);
       setGroupName('');
       setGroupRequired(false);
-      setGroupOrder(String(groups.length + 2));
       setMessage('Option group created.');
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const deleteGroup = async (group: Group) => {
+    setBusy(`delete-group-${group.id}`);
+    try {
+      const response = await fetch(`/api/proxy/catalogue/dishes/${dish.id}/option-groups/${group.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw await getRequestError(response, 'Could not delete the option group');
+      setGroups(current => current.filter(item => item.id !== group.id));
+      setConfirmGroup(null);
+      setMessage('Option group deleted.');
     } catch (error: any) {
       setMessage(error.message);
     } finally {
@@ -61,8 +90,8 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ optionId, displayOrder: group.options.length + 1 }),
       });
-      if (!response.ok) throw new Error('Could not attach option');
-      const option = initialOptions.find(item => item.id === optionId);
+      if (!response.ok) throw await getRequestError(response, 'Could not attach option');
+      const option = options.find(item => item.id === optionId);
       if (option) {
         setGroups(current => current.map(item => item.id === group.id
           ? { ...item, options: [...item.options, { id: Date.now(), option }] }
@@ -86,14 +115,14 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newOption.name.trim(), costPrice: Math.round(Number(newOption.price) * 100) }),
       });
-      if (!optionResponse.ok) throw new Error('Could not create option');
+      if (!optionResponse.ok) throw await getRequestError(optionResponse, 'Could not create option');
       const option = await optionResponse.json();
       const attachedResponse = await fetch(`/api/proxy/catalogue/dishes/${dish.id}/option-groups/${group.id}/options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ optionId: option.id, displayOrder: group.options.length + 1 }),
       });
-      if (!attachedResponse.ok) throw new Error('Could not attach the new option');
+      if (!attachedResponse.ok) throw await getRequestError(attachedResponse, 'Could not attach the new option');
       setGroups(current => current.map(item => item.id === group.id
         ? { ...item, options: [...item.options, { id: Date.now(), option }] }
         : item));
@@ -139,7 +168,7 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
     setBusy('');
   };
 
-  const availableOptions = (group: Group) => initialOptions.filter(option =>
+  const availableOptions = (group: Group) => options.filter(option =>
     option.isActive && !group.options.some(item => item.option.id === option.id),
   );
 
@@ -160,13 +189,21 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
         {[...groups].sort((a, b) => a.displayOrder - b.displayOrder).map(group => (
           <section key={group.id} style={{ border: '1px solid var(--border)', borderRadius: '10px', padding: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-              <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <strong>{group.name}</strong>
                 <span style={{ marginLeft: '8px', fontSize: '.74rem', color: group.isRequired ? '#b91c1c' : 'var(--text-muted)' }}>
-                  {group.isRequired ? 'Required · choose one' : 'Optional'}
+                  {group.isRequired ? 'Required' : 'Optional'}
                 </span>
               </div>
-              <span style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>{group.options.length} options</span>
+              <button
+                className="btn-secondary"
+                type="button"
+                disabled={busy === `delete-group-${group.id}`}
+                onClick={() => setConfirmGroup(group)}
+                style={{ color: '#b91c1c', borderColor: '#fecaca', padding: '6px 10px' }}
+              >
+                <Trash2 size={14} /> Delete group
+              </button>
             </div>
             <div style={{ display: 'grid', gap: '8px' }}>
               {group.options.map(item => editingId === item.option.id ? (
@@ -183,8 +220,8 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
                   <span style={{ fontWeight: 600 }}>{item.option.name}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ color: 'var(--text-muted)' }}>${(item.option.costPrice / 100).toFixed(2)}</span>
-                    <button className="btn-secondary icon-button" onClick={() => { setEditingId(item.option.id); setEditingValues({ name: item.option.name, costPrice: item.option.costPrice }); }}><Edit3 size={15} /></button>
-                    <button className="btn-secondary icon-button" disabled={busy === `remove-${item.option.id}`} onClick={() => deactivateOption(item.option.id)}><Trash2 size={15} /></button>
+                    {canEditSharedOptions && <button className="btn-secondary icon-button" onClick={() => { setEditingId(item.option.id); setEditingValues({ name: item.option.name, costPrice: item.option.costPrice }); }}><Edit3 size={15} /></button>}
+                    {canEditSharedOptions && <button className="btn-secondary icon-button" disabled={busy === `remove-${item.option.id}`} onClick={() => deactivateOption(item.option.id)}><Trash2 size={15} /></button>}
                   </div>
                 </div>
               ))}
@@ -206,15 +243,38 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
       </div>
 
       <div style={{ padding: '18px 24px', background: 'var(--bg-light)', borderTop: '1px solid var(--border)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 90px auto', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
           <input className="input-field" placeholder="New group name" value={groupName} onChange={event => setGroupName(event.target.value)} />
-          <input className="input-field" type="number" min="1" placeholder="Order" value={groupOrder} onChange={event => setGroupOrder(event.target.value)} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '.78rem' }}>
-            <input type="checkbox" checked={groupRequired} onChange={event => setGroupRequired(event.target.checked)} /> Required
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '.82rem', whiteSpace: 'nowrap' }}>
+            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Selection</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <input type="radio" name="group-selection" checked={groupRequired} onChange={() => setGroupRequired(true)} /> Required
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <input type="radio" name="group-selection" checked={!groupRequired} onChange={() => setGroupRequired(false)} /> Optional
+            </label>
+          </div>
           <button className="btn-primary" disabled={busy === 'group'} onClick={createGroup}><Plus size={15} /> Add group</button>
         </div>
       </div>
+
+      {confirmGroup && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(15, 23, 42, 0.45)' }} onClick={() => setConfirmGroup(null)} />
+          <div className="premium-card" style={{ position: 'relative', zIndex: 1001, width: '100%', maxWidth: '420px', padding: '24px' }}>
+            <h3 style={{ marginBottom: '8px' }}>Delete option group?</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>
+              “{confirmGroup.name}” and its attached options will be removed from this dish.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button className="btn-secondary" type="button" onClick={() => setConfirmGroup(null)}>Cancel</button>
+              <button className="btn-primary" type="button" disabled={busy === `delete-group-${confirmGroup.id}`} onClick={() => deleteGroup(confirmGroup)} style={{ background: '#b91c1c' }}>
+                {busy === `delete-group-${confirmGroup.id}` ? 'Deleting...' : 'Delete group'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

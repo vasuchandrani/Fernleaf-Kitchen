@@ -3,12 +3,14 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import SettingsForm from './SettingsForm';
 import PricingTiersClient from './PricingTiersClient';
+import AddStationDialog from '@/components/admin/AddStationDialog';
 
 export default async function SettingsPage() {
-  const [me, settings, tiers] = await Promise.all([
+  const [me, settings, tiers, stations] = await Promise.all([
     api.get('/auth/me').catch(() => null),
     api.get('/settings').catch(() => ({})),
-    api.get('/pricing/tiers').catch(() => [])
+    api.get('/pricing/tiers').catch(() => []),
+    api.get('/catalogue/stations').catch(() => [])
   ]);
 
   return (
@@ -60,15 +62,27 @@ export default async function SettingsPage() {
         </div>
 
         <div className="premium-card h-fit">
-          <h3 style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MapPin size={18} /> Kitchen stations
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <MapPin size={18} /> Kitchen stations
+            </h3>
+            <AddStationDialog />
+          </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '16px' }}>
-            Keep routing data out of the catalogue view. Stations are shared reference data for the kitchen team.
+            Shared reference data for the kitchen team.
           </p>
-          <Link href="/admin/catalogue/stations" className="btn-secondary" style={{ textDecoration: 'none' }}>
-            Manage stations
-          </Link>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {(!Array.isArray(stations) || stations.length === 0) ? (
+              <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-light)', borderRadius: '8px', color: 'var(--text-muted)' }}>
+                No Stations defined
+              </div>
+            ) : stations.map((st: any) => (
+              <div key={st.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'var(--bg-light)', borderRadius: '8px' }}>
+                <span style={{ fontWeight: 500 }}>{st.name}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>#{st.id}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

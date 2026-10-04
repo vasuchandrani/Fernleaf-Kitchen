@@ -16,6 +16,7 @@ export default function CataloguePage() {
   const [tiers, setTiers] = useState<any[]>([]);
   const [dishes, setDishes] = useState<any[]>([]);
   const [stations, setStations] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [selectedTier, setSelectedTier] = useState<any>(null);
   const [tierDishes, setTierDishes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +34,7 @@ export default function CataloguePage() {
   useEffect(() => {
     fetchTiers();
     fetchStations();
+    fetchCategories();
   }, []);
 
   const fetchTiers = async () => {
@@ -44,6 +46,13 @@ export default function CataloguePage() {
       }
     } catch { /* */ }
     setLoading(false);
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch('/api/proxy/catalogue/categories');
+      if (res.ok) setCategories(await res.json());
+    } catch { /* */ }
   };
 
   const fetchStations = async () => {
@@ -122,7 +131,8 @@ export default function CataloguePage() {
     return tierDishes.filter(d =>
       d.name.toLowerCase().includes(q) ||
       d.sku.toLowerCase().includes(q) ||
-      d.kitchenStation?.name?.toLowerCase().includes(q)
+      d.kitchenStation?.name?.toLowerCase().includes(q) ||
+      d.category?.name?.toLowerCase().includes(q)
     );
   }, [tierDishes, searchQuery]);
 
@@ -310,6 +320,7 @@ export default function CataloguePage() {
           </div>
           <AddDishDialog
             stations={stations}
+            categories={categories}
             tierId={selectedTier.id}
             onCreated={() => fetchTierDishes(selectedTier.id)}
           />
@@ -352,7 +363,7 @@ export default function CataloguePage() {
                 {filteredTierDishes.map(dish => (
                   <tr key={dish.id} style={{ borderBottom: '1px solid var(--border)', opacity: dish.isActive ? 1 : 0.5, transition: 'opacity 0.2s' }}>
                     <td style={tdStyle}>
-                      <Link href={`/admin/catalogue/${dish.id}`} style={{ fontWeight: 600, color: 'var(--text-main)', textDecoration: 'none' }}>
+                      <Link href={`/admin/catalogue/${dish.id}?tierId=${selectedTier.id}`} style={{ fontWeight: 600, color: 'var(--text-main)', textDecoration: 'none' }}>
                         {dish.name}
                       </Link>
                       {dish.optionGroups?.length > 0 && (
@@ -367,10 +378,10 @@ export default function CataloguePage() {
                     <td style={tdStyle}>
                       <span style={{
                         fontSize: '0.75rem', padding: '2px 8px', borderRadius: '6px', fontWeight: 600,
-                        background: dish.temperature === 'HOT' ? '#fef3c7' : '#e0f2fe',
-                        color: dish.temperature === 'HOT' ? '#d97706' : '#0284c7',
+                        background: dish.dietaryType === 'NON_VEG' ? '#fff1f2' : '#ecfdf5',
+                        color: dish.dietaryType === 'NON_VEG' ? '#be123c' : '#047857',
                       }}>
-                        {dish.temperature}
+                        {dish.category?.name || 'Uncategorized'} · {dish.dietaryType === 'NON_VEG' ? 'Non-veg' : 'Veg'}
                       </span>
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--text-muted)', fontSize: '0.85rem' }}>{dish.kitchenStation?.name || '—'}</td>
@@ -421,7 +432,7 @@ export default function CataloguePage() {
                       </button>
                     </td>
                     <td style={tdStyle}>
-                      <Link href={`/admin/catalogue/${dish.id}`} style={{
+                      <Link href={`/admin/catalogue/${dish.id}?tierId=${selectedTier.id}`} style={{
                         color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 600,
                         textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px',
                       }}>

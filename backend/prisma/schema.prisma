@@ -63,12 +63,21 @@ model Dish {
   minOrderQty     Int?
   isActive        Boolean  @default(true)
   kitchenStationId Int?    // e.g., "South Indian Station"
-  
+  categoryId       Int?
+  dietaryType      String   @default("VEG") // VEG or NON_VEG
+
   kitchenStation  KitchenStation? @relation(fields: [kitchenStationId], references: [id])
+  category        Category? @relation(fields: [categoryId], references: [id])
   optionGroups    OptionGroup[]
   prices          DishPrice[]
   hiddenFor       CompanyHiddenDish[]
   catalogueMemberships PriceTierDish[]
+}
+
+model Category {
+  id     Int    @id @default(autoincrement())
+  name   String @unique
+  dishes Dish[]
 }
 
 model Option {
@@ -84,11 +93,13 @@ model Option {
 model OptionGroup {
   id           Int     @id @default(autoincrement())
   dishId       Int
+  priceTierId  Int?
   name         String  // e.g., "Choose your protein"
   isRequired   Boolean
   displayOrder Int
   
   dish         Dish    @relation(fields: [dishId], references: [id])
+  priceTier    PriceTier? @relation(fields: [priceTierId], references: [id])
   options      OptionGroupOption[]
 }
 
@@ -117,6 +128,7 @@ model PriceTier {
   optionPrices  OptionPrice[]
   companies     Company[]
   dishes        PriceTierDish[]
+  optionGroups  OptionGroup[]
 }
 
 model PriceTierDish {

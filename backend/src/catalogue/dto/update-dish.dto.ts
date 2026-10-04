@@ -36,6 +36,15 @@ export class UpdateDishDto {
   @IsOptional()
   kitchenStationId?: number;
 
+  @IsInt()
+  @IsOptional()
+  categoryId?: number;
+
+  @IsString()
+  @IsEnum(['VEG', 'NON_VEG'])
+  @IsOptional()
+  dietaryType?: string;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;

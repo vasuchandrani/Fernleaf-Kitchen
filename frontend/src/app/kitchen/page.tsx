@@ -4,5 +4,5 @@ import KitchenClient from './KitchenClient';
 export default async function KitchenDashboard() {
   const orders = await api.get('/orders?status=CONFIRMED').catch(() => []);
 
-  return <KitchenClient initialOrders={orders} />;
+  return <KitchenClient initialOrders={orders} activeTab="dashboard" />;
 }

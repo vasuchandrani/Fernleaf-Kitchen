@@ -42,9 +42,8 @@ export default function AddOptionToGroupDialog({ groupId, allOptions }: { groupI
       </button>
 
       {open && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} onClick={() => setOpen(false)} />
-          <div className="premium-card animate-fade-in" style={{ position: 'relative', width: '100%', maxWidth: '400px', zIndex: 1001 }}>
+        <div className="glass-overlay animate-fade-in" onClick={(e) => { if(e.target === e.currentTarget) setOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="premium-card" style={{ position: 'relative', width: '100%', maxWidth: '400px', zIndex: 1001 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3>Add Option</h3>
               <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
