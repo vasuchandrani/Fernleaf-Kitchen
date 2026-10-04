@@ -8,7 +8,10 @@ export async function loginAction(prevState: unknown, formData: FormData) {
   const password = formData.get('password')
 
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+    if (!apiUrl) return { error: 'The application API is not configured.' }
+
+    const res = await fetch(`${apiUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -21,7 +24,7 @@ export async function loginAction(prevState: unknown, formData: FormData) {
     const data = await res.json()
     
     // Fetch user profile to get their role
-    const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
+    const meRes = await fetch(`${apiUrl}/auth/me`, {
       headers: { Authorization: `Bearer ${data.access_token}` }
     })
     

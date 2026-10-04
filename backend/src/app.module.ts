@@ -8,9 +8,16 @@ import { AuthModule } from './auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { PermissionsGuard } from './auth/permissions.guard';
+import { CatalogueModule } from './catalogue/catalogue.module';
+import { PricingModule } from './pricing/pricing.module';
+import { CompaniesModule } from './companies/companies.module';
+import { OrdersModule } from './orders/orders.module';
+import { SettingsModule } from './settings/settings.module';
+import { DispatchModule } from './dispatch/dispatch.module';
+import { InvoicesModule } from './invoices/invoices.module';
 
 @Module({
-  imports: [ConfigModule.forRoot(), PrismaModule, UsersModule, AuthModule],
+  imports: [ConfigModule.forRoot(), PrismaModule, UsersModule, AuthModule, CatalogueModule, PricingModule, CompaniesModule, OrdersModule, SettingsModule, DispatchModule, InvoicesModule],
   controllers: [AppController],
   providers: [
     AppService,

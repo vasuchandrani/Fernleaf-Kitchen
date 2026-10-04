@@ -3,6 +3,7 @@
 import { useActionState, useState, useEffect } from 'react'
 import { loginAction } from '../actions/auth'
 import { useRouter } from 'next/navigation'
+import CustomSelect from '@/components/CustomSelect'
 
 const testAccounts = [
   { role: 'Admin', email: 'admin@test.com', pass: 'Test@1234' },
@@ -24,8 +25,8 @@ export default function LoginPage() {
     }
   }, [state, router])
 
-  const handleAutofill = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selected = testAccounts.find(acc => acc.role === e.target.value)
+  const handleAutofill = (roleValue: string | number) => {
+    const selected = testAccounts.find(acc => acc.role === roleValue)
     if (selected) {
       setEmail(selected.email)
       setPassword(selected.pass)
@@ -50,7 +51,7 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-2 font-medium">Welcome back. Please sign in to continue.</p>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
           <div className="p-8">
             <form action={formAction} className="space-y-5">
               <div>
@@ -111,19 +112,12 @@ export default function LoginPage() {
             </div>
 
             <div className="relative">
-              <select 
+              <CustomSelect 
+                value=""
                 onChange={handleAutofill}
-                defaultValue=""
-                className="w-full appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-3 px-4 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300 transition-shadow text-sm font-medium cursor-pointer hover:bg-gray-100"
-              >
-                <option value="" disabled>Select test account</option>
-                {testAccounts.map(acc => (
-                  <option key={acc.role} value={acc.role}>{acc.role}</option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-              </div>
+                options={testAccounts.map(acc => ({ value: acc.role, label: acc.role, subLabel: acc.email }))}
+                placeholder="Select test account"
+              />
             </div>
           </div>
         </div>
