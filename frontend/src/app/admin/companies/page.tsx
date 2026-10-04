@@ -2,6 +2,7 @@ import { api } from '@/lib/api';
 import Link from 'next/link';
 import { Users, Mail, Tag } from 'lucide-react';
 import AddCompanyDialog from '@/components/admin/AddCompanyDialog';
+import CompanyCardActions from './CompanyCardActions';
 
 export default async function CompaniesPage() {
   const companies = await api.get('/companies').catch(() => []);
@@ -26,9 +27,12 @@ export default async function CompaniesPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
           {companies.map((company: any) => (
-            <Link key={company.id} href={`/admin/companies/${company.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-              <div className="premium-card" style={{ cursor: 'pointer' }}>
-                <h3 style={{ marginBottom: '8px', fontSize: '1.15rem' }}>{company.name}</h3>
+            <div key={company.id} className="premium-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '22px 22px 0' }}>
+                  <h3 style={{ marginBottom: '8px', fontSize: '1.15rem' }}>{company.name}</h3>
+                  <CompanyCardActions company={company} />
+              </div>
+              <Link href={`/admin/companies/${company.id}`} style={{ display: 'block', padding: '0 22px 16px', textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '16px' }}>
                   <Mail size={14} /> {company.billingEmail}
                 </div>
@@ -39,10 +43,15 @@ export default async function CompaniesPage() {
                       {company.priceTier?.name || 'Standard'}
                     </span>
                   </div>
-                  <span className="btn-secondary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>Manage →</span>
+                  <span style={{ color: 'var(--primary)', fontSize: '0.85rem', fontWeight: 700 }}>Open menu</span>
                 </div>
+              </Link>
+              <div style={{ padding: '0 22px 18px', borderTop: '1px solid var(--border)' }}>
+                <Link href={`/admin/companies/${company.id}/details`} className="btn-secondary" style={{ display: 'flex', justifyContent: 'center', marginTop: '14px', textDecoration: 'none' }}>
+                  Manage company
+                </Link>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

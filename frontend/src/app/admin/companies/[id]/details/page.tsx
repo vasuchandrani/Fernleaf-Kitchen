@@ -1,9 +1,10 @@
 import { api } from '@/lib/api';
 import Link from 'next/link';
-import { ChevronLeft, Users, Mail, MapPin, Tag, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, Users, Mail, MapPin, Tag, ShoppingCart, Building2 } from 'lucide-react';
 import AddEmployeeDialog from '../AddEmployeeDialog';
 import BulkAddEmployeesDialog from '../BulkAddEmployeesDialog';
 import ChangeTierDialog from './ChangeTierDialog';
+import EmployeeActions from './EmployeeActions';
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,8 +28,12 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
         <ChevronLeft size={16} /> Back to Companies
       </Link>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
+      <section className="premium-card" style={{ marginBottom: '24px', padding: '28px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          <div style={{ width: 52, height: 52, display: 'grid', placeItems: 'center', borderRadius: 14, background: '#ecfdf5', color: 'var(--primary)' }}><Building2 size={25} /></div>
+          <div>
+          <p className="eyebrow">Company management</p>
           <h1 style={{ marginBottom: '8px' }}>{company.name}</h1>
           <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
@@ -48,6 +53,13 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
           <AddEmployeeDialog companyId={company.id} />
         </div>
       </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+        <Metric label="Employees" value={company.employees?.length || 0} />
+        <Metric label="Delivery addresses" value={company.addresses?.length || 0} />
+        <Metric label="Catalogue" value={company.priceTier?.name || 'Default'} />
+      </div>
+      </section>
 
       {/* Addresses */}
       {company.addresses && company.addresses.length > 0 && (
@@ -71,9 +83,10 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
 
       {/* Employees Table */}
       <div className="premium-card">
-        <h3 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Users size={18} /> Employees ({company.employees?.length || 0})
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: '20px', flexWrap: 'wrap' }}>
+          <div><h3 style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}><Users size={18} /> Employees</h3><p style={{ color: 'var(--text-muted)', fontSize: '.85rem', margin: 0 }}>People eligible to receive meals from this company.</p></div>
+          <span style={{ color: 'var(--text-muted)', fontSize: '.85rem' }}>{company.employees?.length || 0} total</span>
+        </div>
         {!company.employees || company.employees.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '32px' }}>No employees found. Click &quot;Add Employee&quot; to add one.</p>
         ) : (
@@ -83,6 +96,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                 <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
                   <th style={{ padding: '12px 8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.85rem' }}>Name</th>
                   <th style={{ padding: '12px 8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.85rem' }}>Email</th>
+                  <th style={{ padding: '12px 8px' }} />
                 </tr>
               </thead>
               <tbody>
@@ -90,6 +104,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                   <tr key={emp.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '14px 8px', fontWeight: 500 }}>{emp.name}</td>
                     <td style={{ padding: '14px 8px', color: 'var(--text-muted)' }}>{emp.email}</td>
+                    <td style={{ padding: '14px 8px', textAlign: 'right' }}><EmployeeActions companyId={company.id} employee={emp} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -99,4 +114,8 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
       </div>
     </div>
   );
+}
+
+function Metric({ label, value }: { label: string; value: string | number }) {
+  return <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-light)' }}><div style={{ fontSize: '.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div><strong style={{ fontSize: '1rem' }}>{value}</strong></div>;
 }

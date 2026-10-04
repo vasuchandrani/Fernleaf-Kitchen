@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, ParseIntPipe, Patch, Delete } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { BulkCreateEmployeesDto, CreateEmployeeDto } from './dto/create-employee.dto';
@@ -26,6 +26,18 @@ export class CompaniesController {
     return this.companiesService.getCompany(id);
   }
 
+  @Patch(':id')
+  @RequirePermissions('companies.write')
+  updateCompany(@Param('id', ParseIntPipe) id: number, @Body() data: Partial<CreateCompanyDto>) {
+    return this.companiesService.updateCompany(id, data);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('companies.write')
+  deleteCompany(@Param('id', ParseIntPipe) id: number) {
+    return this.companiesService.deleteCompany(id);
+  }
+
   @Post(':id/employees')
   @RequirePermissions('companies.write')
   addEmployee(
@@ -33,6 +45,25 @@ export class CompaniesController {
     @Body() dto: CreateEmployeeDto
   ) {
     return this.companiesService.addEmployee(companyId, dto);
+  }
+
+  @Patch(':id/employees/:employeeId')
+  @RequirePermissions('companies.write')
+  updateEmployee(
+    @Param('id', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() data: Partial<CreateEmployeeDto>,
+  ) {
+    return this.companiesService.updateEmployee(companyId, employeeId, data);
+  }
+
+  @Delete(':id/employees/:employeeId')
+  @RequirePermissions('companies.write')
+  deleteEmployee(
+    @Param('id', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+  ) {
+    return this.companiesService.deleteEmployee(companyId, employeeId);
   }
 
   @Post(':id/employees/bulk')

@@ -2,6 +2,7 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDishDto } from './dto/create-dish.dto';
 import { UpdateDishDto } from './dto/update-dish.dto';
+import { Prisma } from '@prisma/client';
 
 export class CreateOptionDto {
   name: string;
@@ -28,10 +29,12 @@ export class CatalogueService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createDish(data: CreateDishDto) {
-    const { options, ...dishData } = data;
+    const { options, tierId, ...dishData } = data;
     try {
       if (!options || options.length === 0) {
-        return await this.prisma.dish.create({ data: dishData });
+        const dish = await this.prisma.dish.create({ data: dishData });
+        await this.attachDishToCatalogues(dish.id, tierId);
+        return dish;
       }
 
       return await this.prisma.$transaction(async (tx) => {
@@ -66,13 +69,42 @@ export class CatalogueService {
           });
         }
         
+        await this.attachDishToCatalogues(dish.id, tierId, tx);
         return dish;
       });
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new ConflictException('A dish with this SKU already exists');
       }
+
       throw error;
+    }
+  }
+
+  private async attachDishToCatalogues(
+    dishId: number,
+    tierId?: number,
+    client: PrismaService | Prisma.TransactionClient = this.prisma,
+  ) {
+    if (tierId) {
+      const tier = await client.priceTier.findUnique({ where: { id: tierId } });
+      if (!tier) throw new NotFoundException('Catalogue not found');
+      const tiers = tier.isDefault
+        ? await client.priceTier.findMany({ select: { id: true } })
+        : [{ id: tierId }];
+      await client.priceTierDish.createMany({
+        data: tiers.map((item: { id: number }) => ({ tierId: item.id, dishId })),
+        skipDuplicates: true,
+      });
+      return;
+    }
+    const defaultTier = await client.priceTier.findFirst({ where: { isDefault: true } });
+    if (defaultTier) {
+      const tiers = await client.priceTier.findMany({ select: { id: true } });
+      await client.priceTierDish.createMany({
+        data: tiers.map((item: { id: number }) => ({ tierId: item.id, dishId })),
+        skipDuplicates: true,
+      });
     }
   }
 

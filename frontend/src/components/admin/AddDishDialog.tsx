@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import CustomSelect from '@/components/CustomSelect';
 
-export default function AddDishDialog({ stations = [], onCreated }: { stations?: any[]; onCreated?: () => void }) {
+export default function AddDishDialog({ stations = [], tierId, onCreated }: { stations?: any[]; tierId?: number; onCreated?: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +23,7 @@ export default function AddDishDialog({ stations = [], onCreated }: { stations?:
     const costPriceDollars = parseFloat(formData.get('costPrice') as string);
     const costPrice = Math.round(costPriceDollars * 100); // Convert to cents
     
-    const payload: any = { name, sku, temperature, costPrice };
+    const payload: any = { name, sku, temperature, costPrice, ...(tierId ? { tierId } : {}) };
     if (stationId) {
       payload.kitchenStationId = parseInt(stationId);
     }

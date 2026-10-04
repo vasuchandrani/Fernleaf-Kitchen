@@ -32,6 +32,12 @@ export class PricingController {
     return this.pricingService.updateTier(id, data);
   }
 
+  @Delete('tiers/:id')
+  @RequirePermissions('catalogue.write')
+  deleteTier(@Param('id', ParseIntPipe) id: number) {
+    return this.pricingService.deleteTier(id);
+  }
+
   /**
    * Prototype Pattern: Clone a tier to create a new catalogue version.
    */

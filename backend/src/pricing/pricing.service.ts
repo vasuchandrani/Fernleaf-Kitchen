@@ -136,14 +136,60 @@ export class PricingService {
   }
 
   async createTier(data: { name: string; isDefault?: boolean; derivationType?: string; derivationValue?: number }) {
-    return this.prisma.priceTier.create({ data });
+    if (data.isDefault) {
+      throw new ConflictException('The default catalogue is created automatically and cannot be duplicated');
+    }
+    const defaultTier = await this.prisma.priceTier.findFirst({
+      where: { isDefault: true },
+      select: { id: true },
+    });
+    return this.prisma.$transaction(async tx => {
+      const tier = await tx.priceTier.create({
+        data: {
+          name: data.name.trim(),
+          isDefault: false,
+          derivedFromTierId: defaultTier?.id,
+          derivationType: data.derivationType || null,
+          derivationValue: data.derivationValue ?? null,
+        },
+      });
+      if (defaultTier) {
+        const dishes = await tx.priceTierDish.findMany({
+          where: { tierId: defaultTier.id },
+          select: { dishId: true },
+        });
+        if (dishes.length) {
+          await tx.priceTierDish.createMany({
+            data: dishes.map(dish => ({ tierId: tier.id, dishId: dish.dishId })),
+          });
+        }
+      }
+      return tier;
+    });
   }
 
   async updateTier(id: number, data: { name?: string; derivationType?: string; derivationValue?: number }) {
+    const tier = await this.prisma.priceTier.findUnique({ where: { id } });
+    if (!tier) throw new NotFoundException('Catalogue not found');
+    const name = data.name?.trim();
+    if (name === '') throw new ConflictException('Catalogue name is required');
     return this.prisma.priceTier.update({
       where: { id },
-      data
+      data: {
+        ...(name ? { name } : {}),
+        ...(data.derivationType !== undefined ? { derivationType: data.derivationType || null } : {}),
+        ...(data.derivationValue !== undefined ? { derivationValue: data.derivationValue } : {}),
+      },
     });
+  }
+
+  async deleteTier(id: number) {
+    const tier = await this.prisma.priceTier.findUnique({ where: { id } });
+    if (!tier) throw new NotFoundException('Catalogue not found');
+    if (tier.isDefault) throw new ConflictException('The default catalogue cannot be deleted');
+    const company = await this.prisma.company.findFirst({ where: { priceTierId: id }, select: { id: true } });
+    if (company) throw new ConflictException('Reassign companies before deleting this catalogue');
+    return this.prisma.priceTier.delete({ where: { id } });
   }
 
   /**
@@ -201,6 +247,13 @@ export class PricingService {
         });
       }
 
+      const sourceDishes = await tx.priceTierDish.findMany({ where: { tierId: sourceTierId } });
+      if (sourceDishes.length > 0) {
+        await tx.priceTierDish.createMany({
+          data: sourceDishes.map(item => ({ tierId: newTier.id, dishId: item.dishId })),
+        });
+      }
+
       return newTier;
     });
   }
@@ -214,6 +267,7 @@ export class PricingService {
     if (!tier) throw new NotFoundException('Tier not found');
 
     const dishes = await this.prisma.dish.findMany({
+      where: { catalogueMemberships: { some: { tierId } } },
       include: {
         kitchenStation: true,
         prices: { where: { tierId } },

@@ -7,7 +7,14 @@ type Option = { id: number; name: string; costPrice: number; isActive: boolean }
 type Group = { id: number; name: string; isRequired: boolean; displayOrder: number; options: { id: number; option: Option }[] };
 
 export default function DishOptionsManager({ dish, initialOptions }: { dish: any; initialOptions: Option[] }) {
-  const [groups, setGroups] = useState<Group[]>(dish.optionGroups || []);
+  const [groups, setGroups] = useState<Group[]>(
+    (dish.optionGroups || []).map((group: any) => ({
+      ...group,
+      options: Array.isArray(group.options)
+        ? group.options.filter((item: any) => item?.option)
+        : [],
+    })),
+  );
   const [groupName, setGroupName] = useState('');
   const [groupRequired, setGroupRequired] = useState(false);
   const [groupOrder, setGroupOrder] = useState('1');
@@ -17,11 +24,6 @@ export default function DishOptionsManager({ dish, initialOptions }: { dish: any
   const [editingValues, setEditingValues] = useState({ name: '', costPrice: 0 });
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
-
-  const attachedIds = useMemo(
-    () => new Set(groups.flatMap(group => group.options.map(item => item.option.id))),
-    [groups],
-  );
 
   const createGroup = async () => {
     if (!groupName.trim()) return;

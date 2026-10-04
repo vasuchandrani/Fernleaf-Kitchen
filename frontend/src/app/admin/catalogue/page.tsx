@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Layers, Plus, Copy, ArrowRight, Shield, Percent, Tag, Settings2, ChevronLeft, Search, ToggleLeft, ToggleRight, Edit3, Check, X, Utensils, DollarSign } from 'lucide-react';
+import { Layers, Plus, Copy, ArrowRight, Shield, Percent, Tag, Settings2, ChevronLeft, Search, ToggleLeft, ToggleRight, Edit3, Trash2, Check, X, Utensils, DollarSign } from 'lucide-react';
 import Link from 'next/link';
 import AddDishDialog from '@/components/admin/AddDishDialog';
+import ConfirmationDialog from '@/components/admin/ConfirmationDialog';
 
 /**
  * Catalogue page — shows all price tiers (catalogues).
@@ -25,6 +26,9 @@ export default function CataloguePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPrice, setEditingPrice] = useState<number | null>(null);
   const [editPriceValue, setEditPriceValue] = useState('');
+  const [editingTier, setEditingTier] = useState<any>(null);
+  const [deletingTier, setDeletingTier] = useState<any>(null);
+  const [tierError, setTierError] = useState('');
 
   useEffect(() => {
     fetchTiers();
@@ -70,6 +74,18 @@ export default function CataloguePage() {
     setSelectedTier(null);
     setTierDishes([]);
     setSearchQuery('');
+    fetchTiers();
+  };
+
+  const handleDeleteTier = async (tier: any) => {
+    if (tier.isDefault) return;
+    const response = await fetch(`/api/proxy/pricing/tiers/${tier.id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setTierError(body.message || 'Could not delete catalogue');
+      return;
+    }
+    setDeletingTier(null);
     fetchTiers();
   };
 
@@ -128,13 +144,13 @@ export default function CataloguePage() {
             <div className="spinner-lg" />
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '20px' }}>
             {tiers.map(tier => (
               <div
                 key={tier.id}
                 className="premium-card"
                 onClick={() => handleSelectTier(tier)}
-                style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+                style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden', minHeight: '218px', display: 'flex', flexDirection: 'column' }}
               >
                 {tier.isDefault && (
                   <div style={{
@@ -168,11 +184,11 @@ export default function CataloguePage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: '14px', borderTop: '1px solid var(--border)', gap: 12, flexWrap: 'wrap', marginTop: 'auto', minHeight: '62px' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                     {tier._count?.companies || 0} companies
                   </span>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <button
                       className="btn-secondary"
                       onClick={(e) => { e.stopPropagation(); setCloneSource(tier); setShowCloneDialog(true); }}
@@ -180,7 +196,25 @@ export default function CataloguePage() {
                     >
                       <Copy size={12} /> Clone
                     </button>
-                    <span style={{ color: 'var(--primary)', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {!tier.isDefault && (
+                      <button
+                        className="btn-secondary"
+                        onClick={(e) => { e.stopPropagation(); setEditingTier(tier); }}
+                        style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                      >
+                        <Edit3 size={12} /> Edit
+                      </button>
+                    )}
+                    {!tier.isDefault && (
+                      <button
+                        className="btn-secondary"
+                        onClick={(e) => { e.stopPropagation(); setDeletingTier(tier); }}
+                        style={{ padding: '4px 10px', fontSize: '0.78rem', color: '#b42318' }}
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    )}
+                    <span style={{ color: 'var(--primary)', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 4px' }}>
                       View <ArrowRight size={14} />
                     </span>
                   </div>
@@ -206,6 +240,29 @@ export default function CataloguePage() {
         {/* Clone Tier Dialog */}
         {showCloneDialog && cloneSource && (
           <CloneTierDialog source={cloneSource} onClose={() => { setShowCloneDialog(false); setCloneSource(null); }} onCreated={() => { setShowCloneDialog(false); setCloneSource(null); fetchTiers(); }} />
+        )}
+        {editingTier && (
+          <EditTierDialog
+            tier={editingTier}
+            onClose={() => setEditingTier(null)}
+            onUpdated={() => { setEditingTier(null); fetchTiers(); }}
+          />
+        )}
+        {deletingTier && (
+          <ConfirmationDialog
+            title={`Delete ${deletingTier.name}?`}
+            description="This catalogue and its dish memberships will be removed. Companies must be reassigned before deletion."
+            confirmLabel="Delete catalogue"
+            onConfirm={() => handleDeleteTier(deletingTier)}
+            onCancel={() => setDeletingTier(null)}
+          />
+        )}
+        {tierError && (
+          <DialogOverlay onClose={() => setTierError('')}>
+            <h3>Catalogue could not be deleted</h3>
+            <p style={{ color: '#b42318', lineHeight: 1.5 }}>{tierError}</p>
+            <button className="btn-primary" onClick={() => setTierError('')}>Close</button>
+          </DialogOverlay>
         )}
       </div>
     );
@@ -251,7 +308,11 @@ export default function CataloguePage() {
               style={{ paddingLeft: '32px', padding: '7px 12px 7px 32px', fontSize: '0.85rem', width: '220px' }}
             />
           </div>
-          {selectedTier.isDefault && <AddDishDialog stations={stations} />}
+          <AddDishDialog
+            stations={stations}
+            tierId={selectedTier.id}
+            onCreated={() => fetchTierDishes(selectedTier.id)}
+          />
         </div>
       </div>
 
@@ -390,10 +451,12 @@ function CreateTierDialog({ onClose, onCreated }: { onClose: () => void; onCreat
   const [derivationType, setDerivationType] = useState('');
   const [derivationValue, setDerivationValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
     setSaving(true);
+    setError('');
     try {
       const body: any = { name: name.trim() };
       if (derivationType) {
@@ -406,7 +469,8 @@ function CreateTierDialog({ onClose, onCreated }: { onClose: () => void; onCreat
         body: JSON.stringify(body),
       });
       if (res.ok) onCreated();
-    } catch { /* */ } finally { setSaving(false); }
+      else setError((await res.json().catch(() => ({}))).message || 'Could not create catalogue');
+    } catch { setError('Could not create catalogue'); } finally { setSaving(false); }
   };
 
   return (
@@ -434,6 +498,7 @@ function CreateTierDialog({ onClose, onCreated }: { onClose: () => void; onCreat
               placeholder={derivationType === 'MARKUP_PERCENT' ? 'e.g. 15 for +15%' : derivationType === 'MULTIPLY' ? 'e.g. 2.4' : 'Amount in cents'} />
           </div>
         )}
+        {error && <p style={{ margin: 0, color: '#b42318', fontSize: '.85rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
           <button className="btn-primary" onClick={handleSubmit} disabled={saving || !name.trim()} style={{ flex: 1, justifyContent: 'center' }}>
             {saving ? 'Creating...' : 'Create Catalogue'}
@@ -451,10 +516,12 @@ function CloneTierDialog({ source, onClose, onCreated }: { source: any; onClose:
   const [derivationType, setDerivationType] = useState('MARKUP_PERCENT');
   const [derivationValue, setDerivationValue] = useState('5');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
     setSaving(true);
+    setError('');
     try {
       const res = await fetch(`/api/proxy/pricing/tiers/${source.id}/clone`, {
         method: 'POST',
@@ -466,7 +533,8 @@ function CloneTierDialog({ source, onClose, onCreated }: { source: any; onClose:
         }),
       });
       if (res.ok) onCreated();
-    } catch { /* */ } finally { setSaving(false); }
+      else setError((await res.json().catch(() => ({}))).message || 'Could not clone catalogue');
+    } catch { setError('Could not clone catalogue'); } finally { setSaving(false); }
   };
 
   return (
@@ -499,6 +567,7 @@ function CloneTierDialog({ source, onClose, onCreated }: { source: any; onClose:
                 E.g. &quot;5&quot; means all prices will be 5% higher than {source.name}
               </p>
             )}
+            {error && <p style={{ margin: 0, color: '#b42318', fontSize: '.85rem' }}>{error}</p>}
           </div>
         )}
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
@@ -506,6 +575,64 @@ function CloneTierDialog({ source, onClose, onCreated }: { source: any; onClose:
             <Copy size={14} /> {saving ? 'Cloning...' : 'Clone Catalogue'}
           </button>
           <button className="btn-secondary" onClick={onClose} style={{ justifyContent: 'center' }}>Cancel</button>
+        </div>
+      </div>
+    </DialogOverlay>
+  );
+}
+
+function EditTierDialog({ tier, onClose, onUpdated }: { tier: any; onClose: () => void; onUpdated: () => void }) {
+  const [name, setName] = useState(tier.name);
+  const [derivationType, setDerivationType] = useState(tier.derivationType || '');
+  const [derivationValue, setDerivationValue] = useState(tier.derivationValue?.toString() || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    setError('');
+    const response = await fetch(`/api/proxy/pricing/tiers/${tier.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.trim(),
+        derivationType: derivationType || null,
+        derivationValue: derivationType ? Number(derivationValue) || 0 : null,
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(body.message || 'Could not update catalogue');
+      setSaving(false);
+      return;
+    }
+    onUpdated();
+  };
+
+  return (
+    <DialogOverlay onClose={onClose}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <p className="eyebrow">Catalogue settings</p>
+          <h3 style={{ margin: 0 }}>Edit {tier.name}</h3>
+        </div>
+        <button className="btn-secondary icon-button" onClick={onClose} aria-label="Close"><X size={16} /></button>
+      </div>
+      <div style={{ display: 'grid', gap: 16 }}>
+        <div><label style={labelStyle}>Catalogue name</label><input className="input-field" value={name} onChange={event => setName(event.target.value)} /></div>
+        <div><label style={labelStyle}>Pricing strategy</label><select className="input-field" value={derivationType} onChange={event => setDerivationType(event.target.value)} style={{ appearance: 'auto' }}>
+          <option value="">No automatic adjustment</option>
+          <option value="MARKUP_PERCENT">Increase by percentage</option>
+          <option value="MULTIPLY">Multiply by factor</option>
+          <option value="ADD_AMOUNT">Add fixed amount</option>
+          <option value="SUBTRACT_AMOUNT">Subtract fixed amount</option>
+        </select></div>
+        {derivationType && <div><label style={labelStyle}>Adjustment value</label><input className="input-field" type="number" step="0.01" value={derivationValue} onChange={event => setDerivationValue(event.target.value)} /></div>}
+        {error && <p style={{ margin: 0, color: '#b42318', fontSize: '.85rem' }}>{error}</p>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+          <button className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn-primary" disabled={saving || !name.trim()} onClick={handleSubmit}>{saving ? 'Saving…' : 'Save changes'}</button>
         </div>
       </div>
     </DialogOverlay>

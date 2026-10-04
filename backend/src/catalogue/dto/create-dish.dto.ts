@@ -45,6 +45,10 @@ export class CreateDishDto {
   @IsOptional()
   kitchenStationId?: number;
 
+  @IsOptional()
+  @IsInt()
+  tierId?: number;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => DishOptionInlineDto)

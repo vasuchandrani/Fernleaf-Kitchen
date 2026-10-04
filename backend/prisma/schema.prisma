@@ -68,6 +68,7 @@ model Dish {
   optionGroups    OptionGroup[]
   prices          DishPrice[]
   hiddenFor       CompanyHiddenDish[]
+  catalogueMemberships PriceTierDish[]
 }
 
 model Option {
@@ -115,6 +116,16 @@ model PriceTier {
   dishPrices    DishPrice[]
   optionPrices  OptionPrice[]
   companies     Company[]
+  dishes        PriceTierDish[]
+}
+
+model PriceTierDish {
+  id       Int @id @default(autoincrement())
+  tierId   Int
+  dishId   Int
+  tier     PriceTier @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  dish     Dish @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  @@unique([tierId, dishId])
 }
 
 model DishPrice {

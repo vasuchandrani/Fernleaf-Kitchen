@@ -79,6 +79,10 @@ async function main() {
       roles.set(name, role.id);
   }
 
+  await prisma.priceTier.create({
+    data: { name: 'Default Catalogue', isDefault: true },
+  });
+
   const password = await bcrypt.hash('Test@1234', 10);
   for (const user of demoUsers) {
       await prisma.user.create({
